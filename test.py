@@ -10,8 +10,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Test Model')
     parser.add_argument('--query_img_name', default='/home/data/car/uncropped/008055.jpg', type=str,
                         help='query image name')
-    parser.add_argument('--data_base', default='car_resnet50_balanced_proxy_512_data_base.pth', type=str,
-                        help='queried database')
+    parser.add_argument('--data_base', default='car_resnet50_512_0.8_data_base.pth', type=str, help='queried database')
     parser.add_argument('--retrieval_num', default=8, type=int, help='retrieval number')
 
     opt = parser.parse_args()

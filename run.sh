@@ -32,16 +32,16 @@ fi
 
 data_name=("car" "cub")
 backbone_type=("resnet50" "inception" "googlenet")
-loss_name=("balanced_proxy" "proxy_anchor")
 feature_dim=(64 512)
+ratios=(0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0)
 
 for data in ${data_name[*]}; do
   for backbone in ${backbone_type[*]}; do
-    for loss in ${loss_name[*]}; do
-      for feature in ${feature_dim[*]}; do
-        echo "python train.py --data_path ${path} --data_name ${data} --backbone_type ${backbone} --loss_name ${loss} --feature_dim ${feature} --batch_size ${size} --num_epochs ${epochs} --warm_up ${warm} --recalls ${recall}"
+    for feature in ${feature_dim[*]}; do
+      for ratio in ${ratios[*]}; do
+        echo "python train.py --data_path ${path} --data_name ${data} --backbone_type ${backbone} --feature_dim ${feature} --ratio ${ratio} --batch_size ${size} --num_epochs ${epochs} --warm_up ${warm} --recalls ${recall}"
         # shellcheck disable=SC2086
-        python train.py --data_path ${path} --data_name ${data} --backbone_type ${backbone} --loss_name ${loss} --feature_dim ${feature} --batch_size ${size} --num_epochs ${epochs} --warm_up ${warm} --recalls ${recall}
+        python train.py --data_path ${path} --data_name ${data} --backbone_type ${backbone} --feature_dim ${feature} --ratio ${ratio} --batch_size ${size} --num_epochs ${epochs} --warm_up ${warm} --recalls ${recall}
       done
     done
   done

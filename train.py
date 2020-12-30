@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from model import Model
-from utils import recall, ImageReader, set_bn_eval, ProxyAnchorLoss, BalancedProxyLoss
+from utils import recall, ImageReader, set_bn_eval, UnifiedProxyLoss
 
 # for reproducibility
 np.random.seed(1)
@@ -78,9 +78,8 @@ if __name__ == '__main__':
     parser.add_argument('--data_name', default='car', type=str, choices=['car', 'cub'], help='dataset name')
     parser.add_argument('--backbone_type', default='resnet50', type=str, choices=['resnet50', 'inception', 'googlenet'],
                         help='backbone network type')
-    parser.add_argument('--loss_name', default='balanced_proxy', type=str,
-                        choices=['balanced_proxy', 'proxy_anchor'], help='loss name')
     parser.add_argument('--feature_dim', default=512, type=int, help='feature dim')
+    parser.add_argument('--ratio', default=0.8, type=float, help='negative sample ratio')
     parser.add_argument('--batch_size', default=64, type=int, help='training batch size')
     parser.add_argument('--num_epochs', default=20, type=int, help='training epoch number')
     parser.add_argument('--warm_up', default=2, type=int, help='warm up number')
@@ -88,10 +87,10 @@ if __name__ == '__main__':
 
     opt = parser.parse_args()
     # args parse
-    data_path, data_name, backbone_type, loss_name = opt.data_path, opt.data_name, opt.backbone_type, opt.loss_name
+    data_path, data_name, backbone_type, ratio = opt.data_path, opt.data_name, opt.backbone_type, opt.ratio
     feature_dim, batch_size, num_epochs = opt.feature_dim, opt.batch_size, opt.num_epochs
     warm_up, recalls = opt.warm_up, [int(k) for k in opt.recalls.split(',')]
-    save_name_pre = '{}_{}_{}_{}'.format(data_name, backbone_type, loss_name, feature_dim)
+    save_name_pre = '{}_{}_{}_{}'.format(data_name, backbone_type, feature_dim, ratio)
 
     results = {'train_loss': [], 'train_accuracy': []}
     for recall_id in recalls:
@@ -108,7 +107,7 @@ if __name__ == '__main__':
     optimizer = AdamP([{'params': model.backbone.parameters()}, {'params': model.refactor.parameters()},
                        {'params': model.fc.parameters(), 'lr': 1e-2}], lr=1e-4)
     lr_scheduler = StepLR(optimizer, step_size=5, gamma=0.5)
-    loss_criterion = BalancedProxyLoss() if loss_name == 'balanced_proxy' else ProxyAnchorLoss()
+    loss_criterion = UnifiedProxyLoss(ratio=ratio)
 
     data_base = {'test_images': test_data_set.images, 'test_labels': test_data_set.labels}
     best_recall = 0.0
