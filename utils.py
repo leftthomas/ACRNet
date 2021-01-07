@@ -91,29 +91,22 @@ def recall(feature_vectors, feature_labels, rank):
 
 
 class UnifiedProxyLoss(nn.Module):
-    def __init__(self, scale=32, margin=0.1, ratio=0.8):
+    def __init__(self, scale=32, margin=0.1):
         super(UnifiedProxyLoss, self).__init__()
         self.scale = scale
         self.margin = margin
-        self.ratio = ratio
 
     def forward(self, output, label):
         pos_label = F.one_hot(label, num_classes=output.size(-1))
         neg_label = 1 - pos_label
         pos_num = pos_label.sum(dim=0)
+        neg_num = neg_label.sum(dim=0)
         pos_num = torch.where(torch.ne(pos_num, 0), pos_num, torch.ones_like(pos_num))
-        neg_num = torch.floor(neg_label.sum(dim=0) * self.ratio)
         neg_num = torch.where(torch.ne(neg_num, 0), neg_num, torch.ones_like(neg_num))
         pos_output = torch.exp(-self.scale * (output - self.margin))
         neg_output = torch.exp(self.scale * (output + self.margin))
         pos_output = torch.where(torch.eq(pos_label, 1), pos_output, torch.zeros_like(pos_output)).sum(dim=0)
-        neg_output = torch.where(torch.eq(neg_label, 1), neg_output, torch.zeros_like(neg_output))
+        neg_output = torch.where(torch.eq(neg_label, 1), neg_output, torch.zeros_like(neg_output)).sum(dim=0)
 
-        # sort and select negative samples
-        neg_output, _ = torch.sort(neg_output.t(), dim=-1, descending=True)
-        neg_index = torch.arange(output.size(0), device=neg_output.device).unsqueeze(dim=0)
-        neg_output = torch.where(torch.lt(neg_index, neg_num.unsqueeze(dim=-1)), neg_output,
-                                 torch.zeros_like(neg_output)).sum(dim=-1)
-
-        loss = torch.mean(torch.log(pos_output / pos_num + neg_output / neg_num + 1))
+        loss = torch.mean(torch.log((pos_output / pos_num + 1) * (neg_output / neg_num + 1)))
         return loss
