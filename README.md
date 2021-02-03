@@ -7,29 +7,8 @@ paper [Gated-SCNN: Gated Shape CNNs for Semantic Segmentation](https://arxiv.org
 
 ## Requirements
 
-- [Anaconda](https://www.anaconda.com/download/)
-- [PyTorch](https://pytorch.org)
-
 ```
-conda install pytorch torchvision cudatoolkit=11.0 -c pytorch
-```
-
-- timm
-
-```
-pip install timm
-```
-
-- opencv
-
-```
-pip install opencv-python
-```
-
-- cityscapesScripts
-
-```
-pip install cityscapesscripts
+pip install -r requirements.txt
 ```
 
 ## Usage
@@ -46,6 +25,16 @@ optional arguments:
 --batch_size                  Number of data for each batch to train [default value is 4]
 --epochs                      Number of sweeps over the dataset to train [default value is 60]
 --save_path                   Save path for results [default value is 'results']
+```
+
+### Test model
+
+```
+python viewer.py --model_weight resnet101_800_800_model.pth
+optional arguments:
+--data_path                   Data path for cityscapes dataset [default value is 'data']
+--model_weight                Pretrained model weight [default value is 'results/resnet50_800_800_model.pth']
+--input_pic                   Path to the input picture [default value is 'test/berlin/berlin_000000_000019_leftImg8bit.png']
 ```
 
 ### Eval model
