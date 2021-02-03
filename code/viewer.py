@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
-from cityscapesscripts.helpers.labels import trainId2label
 from torchvision.transforms import ToPILImage
 
 from model import GatedSCNN
@@ -14,7 +13,7 @@ from utils import transform, get_palette
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Predict segmentation result from a given image')
     parser.add_argument('--data_path', default='data', type=str, help='Data path for cityscapes dataset')
-    parser.add_argument('--model_weight', type=str, default='results/resnet50_800_800_model.pth',
+    parser.add_argument('--model_weight', type=str, default='results/resnet50_512_512_model.pth',
                         help='Pretrained model weight')
     parser.add_argument('--input_pic', type=str, default='test/berlin/berlin_000000_000019_leftImg8bit.png',
                         help='Path to the input picture')
@@ -42,8 +41,6 @@ if __name__ == '__main__':
     with torch.no_grad():
         output, _ = model(image, grad)
         pred = torch.argmax(output, dim=1)
-        for key in sorted(trainId2label.keys(), reverse=True):
-            pred[pred == key] = trainId2label[key].id
         pred_image = ToPILImage()(pred.byte().cpu())
         pred_image.putpalette(get_palette())
         if 'test' not in input_pic:
