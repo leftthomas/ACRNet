@@ -11,7 +11,7 @@ from dataset import creat_dataset, Tianchi
 from model import GatedSCNN
 
 
-# test for loop all data
+# loop all data to test
 def for_loop(net, data_loader, save_root):
     net.eval()
 
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', default='../tcdata/suichang_round1_test_partA_210120', type=str,
                         help='Data path for testing dataset')
     parser.add_argument('--model_weight', type=str, default='../user_data/model.pth', help='Pretrained model weight')
-    parser.add_argument('--batch_size', default=16, type=int, help='Number of data for each batch to train')
+    parser.add_argument('--batch_size', default=16, type=int, help='Number of data for each batch to test')
     parser.add_argument('--save_path', default='../prediction_result', type=str, help='Save path for results')
 
     # args parse
