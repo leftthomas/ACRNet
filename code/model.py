@@ -103,7 +103,7 @@ class FeatureFusion(ASPP):
 
 
 class GatedSCNN(nn.Module):
-    def __init__(self, backbone_type='resnet50', num_classes=19):
+    def __init__(self, in_channels=4, num_classes=19):
         super().__init__()
 
         self.regular_stream = RegularStream(backbone_type)

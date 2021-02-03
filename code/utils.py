@@ -1,19 +1,12 @@
 import torch
 import torch.nn.functional as F
-from cityscapesscripts.helpers.labels import trainId2label
 from torch import nn
-from torchvision import transforms
 from tqdm import tqdm
-
-city_mean, city_std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(city_mean, city_std)])
 
 
 def get_palette():
-    palette = []
-    for key in sorted(trainId2label.keys()):
-        if key != -1 and key != 255:
-            palette += list(trainId2label[key].color)
+    palette = [128, 64, 128, 244, 35, 232, 70, 70, 70, 102, 102, 156, 190, 153, 153, 153, 153, 153,
+               250, 170, 30, 220, 220, 0, 107, 142, 35, 152, 251, 152]
     return palette
 
 

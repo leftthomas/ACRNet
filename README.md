@@ -40,11 +40,10 @@ optional arguments:
 ### Eval model
 
 ```
-python viewer.py --model_weight resnet101_800_800_model.pth
+python viewer.py --input_pic ../tcdata/suichang_round1_train_210120/000001.tif
 optional arguments:
---data_path                   Data path for cityscapes dataset [default value is 'data']
---model_weight                Pretrained model weight [default value is 'results/resnet50_800_800_model.pth']
---input_pic                   Path to the input picture [default value is 'test/berlin/berlin_000000_000019_leftImg8bit.png']
+--model_weight                Pretrained model weight [default value is '../user_data/model.pth']
+--input_pic                   Path to the input picture [default value is '../tcdata/suichang_round1_test_partA_210120/000001.tif']
 ```
 
 ## Results

@@ -9,15 +9,14 @@ import cv2
 import numpy as np
 from scipy.ndimage.morphology import distance_transform_edt
 from torch.utils.data import Dataset
-
-from utils import city_mean, city_std
+from tqdm import tqdm
 
 grad_progress = 0
 boundary_progress = 0
 
 
 class Cityscapes(Dataset):
-    def __init__(self, root, split='train', crop_size=None, mean=city_mean, std=city_std, ignore_label=255):
+    def __init__(self, root, split='train', crop_size=None, ignore_label=255):
 
         self.split = split
         if split == 'train':
@@ -117,10 +116,9 @@ class Cityscapes(Dataset):
 
 def generate_grad(image_name, total_num):
     # create the output filename
-    dst = image_name.replace('/leftImg8bit/', '/gtFine/')
-    dst = dst.replace('_leftImg8bit', '_gtFine_grad')
+    dst = image_name.replace('.tif', '_grad.png')
     # do the conversion
-    grad_image = cv2.Canny(cv2.imread(image_name), 10, 100)
+    grad_image = cv2.Canny(cv2.imread(image_name, cv2.IMREAD_COLOR), 10, 100)
     cv2.imwrite(dst, grad_image)
     global grad_progress
     grad_progress += 1
@@ -192,3 +190,15 @@ def creat_dataset(root, num_classes=19, ignore_label=255):
                  files)
         pool.close()
         pool.join()
+
+
+if __name__ == '__main__':
+    search_path = os.path.join('../tcdata', 'suichang_round1_train_210120', '*.png')
+    files = glob.glob(search_path)
+    files.sort()
+    total = np.arange(1, 11)
+    for image_name in tqdm(files):
+        image = cv2.imread(image_name, cv2.IMREAD_COLOR)
+        labels = np.unique(image)
+        for label in labels:
+            assert label in total, label
