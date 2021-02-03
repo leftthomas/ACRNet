@@ -46,13 +46,10 @@ class DualTaskLoss(nn.Module):
         return loss
 
 
-def compute_metrics(preds, targets, ignore_label=255, num_classes=19, num_category=7):
+def compute_metrics(preds, targets, num_classes, ignore_label=255):
     correct_pixel, total_pixel = torch.zeros(1, device=preds.device), torch.zeros(1, device=preds.device)
     class_tt = torch.zeros(num_classes, device=preds.device)
     class_tf, class_ft = torch.zeros(num_classes, device=preds.device), torch.zeros(num_classes, device=preds.device)
-    category_tt = torch.zeros(num_category, device=preds.device)
-    category_tf, category_ft = torch.zeros(num_category, device=preds.device), torch.zeros(num_category,
-                                                                                           device=preds.device)
     for pred, target in tqdm(zip(preds, targets), desc='calculating the metrics', total=len(preds), dynamic_ncols=True):
         mask = target != ignore_label
         correct_pixel += torch.eq(pred, target)[mask].sum()
@@ -63,22 +60,7 @@ def compute_metrics(preds, targets, ignore_label=255, num_classes=19, num_catego
             class_tt[label] += (class_tf_mask & class_ft_mask).sum()
             class_tf[label] += class_tf_mask.sum()
             class_ft[label] += class_ft_mask.sum()
-        # revert train id to category id
-        for key in sorted(trainId2label.keys(), reverse=True):
-            # avoid overwrite label
-            pred[pred == key] = trainId2label[key].categoryId + 1000
-            target[target == key] = trainId2label[key].categoryId + 1000
-        # back true label, and use 0-index label
-        pred -= 1001
-        target -= 1001
-        for label in range(num_category):
-            category_tf_mask = (target == label) & mask
-            category_ft_mask = (pred == label) & mask
-            category_tt[label] += (category_tf_mask & category_ft_mask).sum()
-            category_tf[label] += category_tf_mask.sum()
-            category_ft[label] += category_ft_mask.sum()
     pa = correct_pixel / torch.clamp(total_pixel, min=1)
     mpa = (class_tt / torch.clamp(class_tf, min=1)).mean()
     class_iou = (class_tt / torch.clamp(class_tf + class_ft - class_tt, min=1)).mean()
-    category_iou = (category_tt / torch.clamp(category_tf + category_ft - category_tt, min=1)).mean()
-    return pa.item(), mpa.item(), class_iou.item(), category_iou.item()
+    return pa.item(), mpa.item(), class_iou.item()

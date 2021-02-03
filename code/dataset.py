@@ -60,7 +60,7 @@ class Tianchi(Dataset):
         image = np.asarray(image, np.float32)
         grad = np.asarray(grad, np.float32)
         if self.split == 'train':
-            label = np.asarray(label, np.long)
+            label = np.asarray(label, np.long) - 1
             boundary = np.asarray(boundary, np.float32)
         # change to Nir/RGB
         image = image[:, :, ::-1]
@@ -108,7 +108,7 @@ class Tianchi(Dataset):
             boundary = boundary[:, ::flip]
 
         if self.split == 'train':
-            return image.copy(), np.expand_dims(grad, axis=0).copy(), (label - 1).copy(), boundary.copy(), name
+            return image.copy(), np.expand_dims(grad, axis=0).copy(), label.copy(), boundary.copy(), name
         else:
             return image.copy(), np.expand_dims(grad, axis=0).copy(), name
 
