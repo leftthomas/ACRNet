@@ -9,7 +9,6 @@ import cv2
 import numpy as np
 from scipy.ndimage.morphology import distance_transform_edt
 from torch.utils.data import Dataset
-from tqdm import tqdm
 
 grad_progress = 0
 boundary_progress = 0
@@ -191,14 +190,3 @@ def creat_dataset(root, num_classes=19, ignore_label=255):
         pool.close()
         pool.join()
 
-
-if __name__ == '__main__':
-    search_path = os.path.join('../tcdata', 'suichang_round1_train_210120', '*.png')
-    files = glob.glob(search_path)
-    files.sort()
-    total = np.arange(1, 11)
-    for image_name in tqdm(files):
-        image = cv2.imread(image_name, cv2.IMREAD_COLOR)
-        labels = np.unique(image)
-        for label in labels:
-            assert label in total, label
