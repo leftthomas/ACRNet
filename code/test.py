@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import ToPILImage
 from tqdm import tqdm
 
-from dataset import creat_dataset, Cityscapes
+from dataset import creat_dataset, Tianchi
 from model import GatedSCNN
 from utils import get_palette, compute_metrics, BoundaryBCELoss, DualTaskLoss
 
@@ -105,9 +105,9 @@ if __name__ == '__main__':
 
     # dataset, model setup, optimizer config and loss definition
     creat_dataset(data_path)
-    train_data = Cityscapes(root=data_path, split='train', crop_size=(crop_h, crop_w))
-    val_data = Cityscapes(root=data_path, split='val')
-    test_data = Cityscapes(root=data_path, split='test')
+    train_data = Tianchi(root=data_path, split='train', crop_size=(crop_h, crop_w))
+    val_data = Tianchi(root=data_path, split='val')
+    test_data = Tianchi(root=data_path, split='test')
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=min(4, batch_size),
                               drop_last=True)
     val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=min(4, batch_size))

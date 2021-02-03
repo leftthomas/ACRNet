@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import ToPILImage
 from tqdm import tqdm
 
-from dataset import creat_dataset, Cityscapes
+from dataset import creat_dataset, Tianchi
 from model import GatedSCNN
 from utils import get_palette, compute_metrics, BoundaryBCELoss, DualTaskLoss
 
@@ -89,25 +89,20 @@ def for_loop(net, data_loader, train_optimizer):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Gated-SCNN')
-    parser.add_argument('--data_path', default='data', type=str, help='Data path for cityscapes dataset')
-    parser.add_argument('--backbone_type', default='resnet50', type=str, choices=['resnet50', 'resnet101'],
-                        help='Backbone type')
-    parser.add_argument('--crop_h', default=512, type=int, help='Crop height for training images')
-    parser.add_argument('--crop_w', default=512, type=int, help='Crop width for training images')
+    parser.add_argument('--data_path', default='../tcdata/suichang_round1_train_210120', type=str,
+                        help='Data path for cityscapes dataset')
     parser.add_argument('--batch_size', default=4, type=int, help='Number of data for each batch to train')
     parser.add_argument('--epochs', default=60, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--save_path', default='results', type=str, help='Save path for results')
-
     # args parse
     args = parser.parse_args()
-    data_path, backbone_type, crop_h, crop_w = args.data_path, args.backbone_type, args.crop_h, args.crop_w
-    batch_size, epochs, save_path = args.batch_size, args.epochs, args.save_path
+    data_path, batch_size, epochs, save_path = args.data_path, args.batch_size, args.epochs, args.save_path
 
     # dataset, model setup, optimizer config and loss definition
-    creat_dataset(data_path)
-    train_data = Cityscapes(root=data_path, split='train', crop_size=(crop_h, crop_w))
-    val_data = Cityscapes(root=data_path, split='val')
-    test_data = Cityscapes(root=data_path, split='test')
+    creat_dataset(data_path, num_classes=10, split='train')
+    train_data = Tianchi(root=data_path, split='train', crop_size=(crop_h, crop_w))
+    val_data = Tianchi(root=data_path, split='val')
+    test_data = Tianchi(root=data_path, split='test')
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=min(4, batch_size),
                               drop_last=True)
     val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=min(4, batch_size))
