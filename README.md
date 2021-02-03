@@ -1,7 +1,9 @@
-# UnifiedProxy
+# Gated-SCNN
 
-A PyTorch implementation of Unified Proxy Loss based on SPL
-paper [Unified Proxy Loss for Fine-grained Image Retrieval]().
+A PyTorch implementation of Gated-SCNN based on ICCV 2019
+paper [Gated-SCNN: Gated Shape CNNs for Semantic Segmentation](https://arxiv.org/abs/1907.05740).
+
+![Network Architecture image from the paper](structure.png)
 
 ## Requirements
 
@@ -12,143 +14,107 @@ paper [Unified Proxy Loss for Fine-grained Image Retrieval]().
 conda install pytorch torchvision cudatoolkit=11.0 -c pytorch
 ```
 
-- pretrainedmodels
+- timm
 
 ```
-pip install pretrainedmodels
+pip install timm
 ```
 
-- AdamP
+- opencv
 
 ```
-pip install adamp
+pip install opencv-python
 ```
 
-## Datasets
+- cityscapesScripts
 
-[CARS196](http://ai.stanford.edu/~jkrause/cars/car_dataset.html)
-and [CUB200-2011](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html)
-are used in this repo. You should download these datasets by yourself, and extract them into `${data_path}` directory,
-make sure the dir names are `car` and `cub`. Then run `data_utils.py` to preprocess them.
+```
+pip install cityscapesscripts
+```
 
 ## Usage
 
-### Train Model
+### Train model
 
 ```
-python train.py  --data_name cub --backbone_type inception --feature_dim 256
+python train.py --epochs 175 --backbone_type resnet101
 optional arguments:
---data_path                   datasets path [default value is '/home/data']
---data_name                   dataset name [default value is 'car'](choices=['car', 'cub'])
---backbone_type               backbone network type [default value is 'resnet50'](choices=['resnet50', 'inception', 'googlenet'])
---feature_dim                 feature dim [default value is 512]
---batch_size                  training batch size [default value is 64]
---num_epochs                  training epoch number [default value is 20]
---warm_up                     warm up number [default value is 2]
---recalls                     selected recall [default value is '1,2,4,8']
+--data_path                   Data path for cityscapes dataset [default value is 'data']
+--backbone_type               Backbone type [default value is 'resnet50'](choices=['resnet50', 'resnet101'])
+--crop_h                      Crop height for training images [default value is 800]
+--crop_w                      Crop width for training images [default value is 800]
+--batch_size                  Number of data for each batch to train [default value is 4]
+--epochs                      Number of sweeps over the dataset to train [default value is 60]
+--save_path                   Save path for results [default value is 'results']
 ```
 
-You also could use `run.sh` to train all the combinations of hyper-parameters.
-
-### Test Model
+### Eval model
 
 ```
-python test.py --retrieval_num 10
+python viewer.py --model_weight resnet101_800_800_model.pth
 optional arguments:
---query_img_name              query image name [default value is '/home/data/car/uncropped/008055.jpg']
---data_base                   queried database [default value is 'car_resnet50_512_data_base.pth']
---retrieval_num               retrieval number [default value is 8]
+--data_path                   Data path for cityscapes dataset [default value is 'data']
+--model_weight                Pretrained model weight [default value is 'results/resnet50_800_800_model.pth']
+--input_pic                   Path to the input picture [default value is 'test/berlin/berlin_000000_000019_leftImg8bit.png']
 ```
-
-## Benchmarks
-
-The models are trained on one NVIDIA GeForce GTX 1070 (8G) GPU. `AdamP` is used to optimize the model, `lr` is `1e-2`
-for the parameters of `proxies` and `1e-4` for other parameters, every `5 steps` the `lr` is reduced by `2`.
-`scale` is `32` and `margin` is `0.1`, a `layer_norm` op is injected to centering the embedding, other hyper-parameters
-are the default values.
-
-### CARS196
-
-<table>
-  <thead>
-    <tr>
-      <th>Backbone</th>
-      <th>R@1</th>
-      <th>R@2</th>
-      <th>R@4</th>
-      <th>R@8</th>
-      <th>Download</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td align="center">ResNet50</td>
-      <td align="center">88.5%</td>
-      <td align="center">93.1%</td>
-      <td align="center">95.8%</td>
-      <td align="center">97.7%</td>
-      <td align="center"><a href="https://pan.baidu.com/s/1ig6gwBBSm0EPzesL5KytYQ">5bww</a></td>
-    </tr>
-    <tr>
-      <td align="center">Inception</td>
-      <td align="center">85.5%</td>
-      <td align="center">91.5%</td>
-      <td align="center">95.0%</td>
-      <td align="center">97.2%</td>
-      <td align="center"><a href="https://pan.baidu.com/s/1-wVIlNjiqiUUD1kRh8Efww">r6e7</a></td>
-    </tr>
-    <tr>
-      <td align="center">GoogLeNet</td>
-      <td align="center">78.1%</td>
-      <td align="center">86.4%</td>
-      <td align="center">91.5%</td>
-      <td align="center">94.9%</td>
-      <td align="center"><a href="https://pan.baidu.com/s/1hMjWx9MG_40oHz6uBqe6OQ">espu</a></td>
-    </tr>
-  </tbody>
-</table>
-
-### CUB200
-
-<table>
-  <thead>
-    <tr>
-      <th>Backbone</th>
-      <th>R@1</th>
-      <th>R@2</th>
-      <th>R@4</th>
-      <th>R@8</th>
-      <th>Download</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td align="center">ResNet50</td>
-      <td align="center">67.7%</td>
-      <td align="center">78.4%</td>
-      <td align="center">85.8%</td>
-      <td align="center">91.0%</td>
-      <td align="center"><a href="https://pan.baidu.com/s/128SGDlxV1Cd8gPJEi7Z4gA">73h5</a></td>
-    </tr>
-    <tr>
-      <td align="center">Inception</td>
-      <td align="center">68.3%</td>
-      <td align="center">78.7%</td>
-      <td align="center">85.9%</td>
-      <td align="center">90.8%</td>
-      <td align="center"><a href="https://pan.baidu.com/s/1i97a8vr3Le_9Bk-L0cTJug">u5b9</a></td>
-    </tr>
-    <tr>
-      <td align="center">GoogLeNet</td>
-      <td align="center">62.4%</td>
-      <td align="center">73.0%</td>
-      <td align="center">82.7%</td>
-      <td align="center">89.3%</td>
-      <td align="center"><a href="https://pan.baidu.com/s/1R6qnPfyBEKysCzWTdnO_6Q">anbq</a></td>
-    </tr>
-  </tbody>
-</table>
 
 ## Results
 
-![vis](results/result.png)
+The experiment is conducted on one NVIDIA TESLA V100 (32G) GPU, and there are some difference between this
+implementation and official implementation:
+
+1. `res2/res3/res4` are used in `GCLs`;
+2. The non-differentiable part of `dual task loss` is not implemented;
+3. The model is trained for `60 epochs`;
+4. The model with `resnet50` backbone is trained with `batch_size 4`;
+5. The model with `resnet101` backbone is trained with `batch_size 3`.
+
+<table>
+	<tbody>
+		<!-- START TABLE -->
+		<!-- TABLE HEADER -->
+		<th>BackBone</th>
+		<th>PA<sup>val</sup></th>
+		<th>mPA<sup>val</sup></th>
+		<th>Class mIOU<sup>val</sup></th>
+		<th>Category mIOU<sup>val</sup></th>
+		<th>PA<sup>test</sup></th>
+		<th>mPA<sup>test</sup></th>
+		<th>Class mIOU<sup>test</sup></th>
+		<th>Category mIOU<sup>test</sup></th>
+		<th>FPS</th>
+		<th>Download</th>
+		<!-- TABLE BODY -->
+		<tr>
+			<td align="center">ResNet50</td>
+			<td align="center">81.8</td>
+			<td align="center">81.8</td>
+			<td align="center">58.0</td>
+			<td align="center">81.7</td>
+			<td align="center">81.8</td>
+            <td align="center">81.8</td>
+			<td align="center">58.0</td>
+			<td align="center">81.7</td>
+			<td align="center">197</td>
+			<td align="center"><a href="https://pan.baidu.com/s/1cmcAtDewYs2lWK7LaktofQ">eg6a</a></td>
+		</tr>
+		<tr>
+			<td align="center">ResNet101</td>
+			<td align="center">81.8</td>
+			<td align="center">81.8</td>
+			<td align="center">58.0</td>
+			<td align="center">81.7</td>
+			<td align="center">81.8</td>
+            <td align="center">81.8</td>
+			<td align="center">58.0</td>
+			<td align="center">81.7</td>
+			<td align="center">197</td>
+			<td align="center"><a href="https://pan.baidu.com/s/1cmcAtDewYs2lWK7LaktofQ">eg6a</a></td>
+		</tr>
+	</tbody>
+</table>
+
+The left is the input image, the middle is ground truth segmentation, and the right is model's predicted segmentation.
+
+![munster_000120_000019](result.png)
+
