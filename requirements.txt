@@ -1,8 +1,6 @@
-timm==0.3.4
 torchvision==0.8.2
 numpy==1.18.5
 pandas==1.0.5
-cityscapesscripts==2.2.0
 tqdm==4.47.0
 opencv-python==4.5.1.48
 pillow==7.2.0

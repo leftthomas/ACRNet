@@ -1,5 +1,4 @@
 import torch
-from timm.models.resnet import resnet50d, resnet101d
 from torch import nn
 from torch.nn import functional as F
 from torchvision.models.resnet import BasicBlock
