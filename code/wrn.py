@@ -4,6 +4,7 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from SoftPool import SoftPool2d
 
 
 class Mish(nn.Module):
@@ -22,19 +23,6 @@ class GlobalAvgPool2d(nn.Module):
         return torch.flatten(F.adaptive_avg_pool2d(inputs, (1, 1)), 1)
 
 
-class SoftPool2d(nn.Module):
-    def __init__(self, kernel_size, stride=None, padding=0, ceil_mode=False, count_include_pad=True,
-                 divisor_override=None):
-        super(SoftPool2d, self).__init__()
-        self.avgpool = nn.AvgPool2d(kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override)
-
-    def forward(self, x):
-        x_exp = torch.exp(x)
-        x_exp_pool = self.avgpool(x_exp)
-        x = self.avgpool(x_exp * x)
-        return x / x_exp_pool
-
-
 def bnrelu(channels):
     return nn.Sequential(nn.BatchNorm2d(channels), nn.ReLU(inplace=True))
 
@@ -48,7 +36,7 @@ def maxpool():
 
 
 def softpool():
-    return SoftPool2d(2, stride=2, padding=0)
+    return SoftPool2d(2, stride=2)
 
 
 class IdentityResidualBlock(nn.Module):

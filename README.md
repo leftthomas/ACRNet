@@ -9,6 +9,9 @@ paper [Gated-SCNN: Gated Shape CNNs for Semantic Segmentation](https://arxiv.org
 
 ```
 pip install -r requirements.txt
+git clone https://github.com/alexandrosstergiou/SoftPool.git
+cd SoftPool/pytorch
+make install
 ```
 
 ## Usage

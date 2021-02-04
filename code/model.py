@@ -106,7 +106,7 @@ class FeatureFusion(ASPP):
 
 
 class GatedSCNN(nn.Module):
-    def __init__(self, in_channels=4, norm_act=bnrelu, pool_func=maxpool, num_classes=10):
+    def __init__(self, in_channels=4, norm_act=bnmish, pool_func=softpool, num_classes=10):
         super().__init__()
         assert norm_act in [bnrelu, bnmish] and pool_func in [maxpool, softpool], 'only support these types'
 
