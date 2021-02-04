@@ -87,7 +87,7 @@ class Tianchi(Dataset):
                                                   pad_w, cv2.BORDER_CONSTANT,
                                                   value=(0.0,))
             else:
-                img_pad, label_pad, grad_pad, boundary_pad = image, label, grad, boundary
+                img_pad, grad_pad, label_pad, boundary_pad = image, grad, label, boundary
 
             img_h, img_w = label_pad.shape
             h_off = random.randint(0, img_h - self.crop_size)

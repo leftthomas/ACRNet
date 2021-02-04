@@ -42,7 +42,7 @@ class DualTaskLoss(nn.Module):
         logit = F.cross_entropy(seg, target, ignore_index=self.ignore_index, reduction='none')
         mask = target != self.ignore_index
         num = torch.clamp(((edge > self.threshold) & mask).sum(), min=1)
-        loss = (logit[edge > self.threshold].sum()) / num
+        loss = (logit[edge > self.threshold]).sum() / num
         return loss
 
 
