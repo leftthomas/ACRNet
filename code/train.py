@@ -79,7 +79,8 @@ if __name__ == '__main__':
     # dataset, model setup, optimizer config and loss definition
     creat_dataset(data_path, num_classes=num_classes, split='train')
     train_data = Tianchi(root=data_path, crop_size=256, split='train')
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=min(4, batch_size))
+    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=min(4, batch_size),
+                              drop_last=True)
     model = GatedSCNN(in_channels=in_channels, num_classes=num_classes).cuda()
     optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
     scheduler = LambdaLR(optimizer, lr_lambda=lambda eiter: math.pow(1 - eiter / epochs, 1.0))
