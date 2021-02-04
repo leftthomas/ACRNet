@@ -34,7 +34,7 @@ class ShapeStream(nn.Module):
         self.res4_conv = nn.Conv2d(512, 1, 1)
         self.res7_conv = nn.Conv2d(4096, 1, 1)
 
-        act = norm_act(64)[-1]
+        act = norm_act(1)[-1]
         self.res1 = BasicBlock(64, 64, 1)
         self.res1.relu = act
         self.res2 = BasicBlock(32, 32, 1)
