@@ -28,20 +28,26 @@ class RegularStream(nn.Module):
 
 
 class ShapeStream(nn.Module):
-    def __init__(self):
+    def __init__(self, norm_act=bnrelu):
         super().__init__()
         self.res3_conv = nn.Conv2d(256, 1, 1)
         self.res4_conv = nn.Conv2d(512, 1, 1)
         self.res7_conv = nn.Conv2d(4096, 1, 1)
+
+        act = norm_act(64)[-1]
         self.res1 = BasicBlock(64, 64, 1)
+        self.res1.relu = act
         self.res2 = BasicBlock(32, 32, 1)
+        self.res2.relu = act
         self.res3 = BasicBlock(16, 16, 1)
+        self.res3.relu = act
+
         self.res1_pre = nn.Conv2d(64, 32, 1)
         self.res2_pre = nn.Conv2d(32, 16, 1)
         self.res3_pre = nn.Conv2d(16, 8, 1)
-        self.gate1 = GatedConv(32, 32)
-        self.gate2 = GatedConv(16, 16)
-        self.gate3 = GatedConv(8, 8)
+        self.gate1 = GatedConv(32, 32, norm_act)
+        self.gate2 = GatedConv(16, 16, norm_act)
+        self.gate3 = GatedConv(8, 8, norm_act)
         self.gate = nn.Conv2d(8, 1, 1, bias=False)
         self.fuse = nn.Conv2d(2, 1, 1, bias=False)
 
@@ -61,16 +67,12 @@ class ShapeStream(nn.Module):
 
 
 class GatedConv(nn.Conv2d):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, norm_act=bnrelu):
         super().__init__(in_channels, out_channels, 1, bias=False)
-        self.attention = nn.Sequential(
-            nn.BatchNorm2d(in_channels + 1),
-            nn.Conv2d(in_channels + 1, in_channels + 1, 1),
-            nn.ReLU(),
-            nn.Conv2d(in_channels + 1, 1, 1),
-            nn.BatchNorm2d(1),
-            nn.Sigmoid()
-        )
+        bn1, act = norm_act(in_channels + 1)
+        bn2, _ = norm_act(1)
+        self.attention = nn.Sequential(bn1, nn.Conv2d(in_channels + 1, in_channels + 1, 1), act,
+                                       nn.Conv2d(in_channels + 1, 1, 1), bn2, nn.Sigmoid())
 
     def forward(self, feat, gate):
         attention = self.attention(torch.cat((feat, gate), dim=1))
@@ -79,15 +81,16 @@ class GatedConv(nn.Conv2d):
 
 
 class FeatureFusion(ASPP):
-    def __init__(self, in_channels, atrous_rates=(6, 12, 18), out_channels=256):
+    def __init__(self, in_channels, atrous_rates=(6, 12, 18), out_channels=256, norm_act=bnrelu):
         # atrous_rates (6, 12, 18) is for stride 16
         super().__init__(in_channels, atrous_rates, out_channels)
-        self.shape_conv = nn.Sequential(
-            nn.Conv2d(1, out_channels, 1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU())
+        self.shape_conv = nn.Sequential(nn.Conv2d(1, out_channels, 1, bias=False), norm_act(out_channels))
         self.project = nn.Conv2d((len(atrous_rates) + 3) * out_channels, out_channels, 1, bias=False)
         self.fine = nn.Conv2d(128, 48, kernel_size=1, bias=False)
+        # replace the activation func
+        act = norm_act(1)[-1]
+        for conv in self.convs:
+            conv[-1] = act
 
     def forward(self, res2, res7, feat):
         res = []
@@ -107,15 +110,13 @@ class GatedSCNN(nn.Module):
         super().__init__()
 
         self.regular_stream = RegularStream(in_channels, norm_act, pool_func)
-        self.shape_stream = ShapeStream()
-        self.feature_fusion = FeatureFusion(4096, 256)
+        self.shape_stream = ShapeStream(norm_act)
+        self.feature_fusion = FeatureFusion(in_channels=4096, out_channels=256, norm_act=norm_act)
         self.seg = nn.Sequential(
             nn.Conv2d(256 + 48, 256, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            norm_act(256),
             nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            norm_act(256),
             nn.Conv2d(256, num_classes, kernel_size=1, bias=False))
 
     def forward(self, x, grad):
