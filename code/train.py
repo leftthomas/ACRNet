@@ -81,18 +81,19 @@ if __name__ == '__main__':
     edge_criterion = BoundaryBCELoss(ignore_index=255)
     task_criterion = DualTaskLoss(threshold=0.8, ignore_index=255)
 
-    results = {'train_loss': [], 'train_PA': [], 'train_mPA': [], 'train_class_mIOU': []}
+    results = {'train_loss': [], 'train_PA': [], 'train_mPA': [], 'train_mIOU': []}
     best_mIOU = 0.0
     # train loop
     for epoch in range(1, epochs + 1):
-        train_loss, train_PA, train_mPA, train_class_mIOU = for_loop(model, train_loader, optimizer)
+        train_loss, train_PA, train_mPA, train_mIOU = for_loop(model, train_loader, optimizer)
         results['train_loss'].append(train_loss)
         results['train_PA'].append(train_PA)
         results['train_mPA'].append(train_mPA)
-        results['train_class_mIOU'].append(train_class_mIOU)
+        results['train_mIOU'].append(train_mIOU)
+        scheduler.step()
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
         data_frame.to_csv('{}/statistics.csv'.format(save_path), index_label='epoch')
-        if train_class_mIOU > best_mIOU:
-            best_mIOU = train_class_mIOU
+        if train_mIOU > best_mIOU:
+            best_mIOU = train_mIOU
             torch.save(model.state_dict(), '{}/model.pth'.format(save_path))
