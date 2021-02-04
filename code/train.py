@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from dataset import creat_dataset, Tianchi
 from model import GatedSCNN
-from utils import compute_metrics, BoundaryBCELoss, DualTaskLoss
+from utils import BoundaryBCELoss, DualTaskLoss
 
 # for reproducibility
 np.random.seed(1)
@@ -23,14 +23,15 @@ torch.manual_seed(1)
 # train for one epoch
 def for_loop(net, data_loader, train_optimizer):
     net.train()
-    total_loss, total_time, total_num, preds, targets = 0.0, 0.0, 0, [], []
+    total_loss, total_time, total_num, total_pixel, correct_pixel = 0.0, 0.0, 0, 0, 0
+    tt, tf, ft = torch.zeros(10).cuda(), torch.zeros(10).cuda(), torch.zeros(10).cuda()
     data_bar = tqdm(data_loader, dynamic_ncols=True)
     for data, grad, target, boundary, name in data_bar:
         data, grad, target, boundary = data.cuda(), grad.cuda(), target.cuda(), boundary.cuda()
         torch.cuda.synchronize()
         start_time = time.time()
         seg, edge = net(data, grad)
-        prediction = torch.argmax(seg.detach(), dim=1)
+        pred = torch.argmax(seg.detach(), dim=1)
         torch.cuda.synchronize()
         end_time = time.time()
         semantic_loss = semantic_criterion(seg, target)
@@ -45,17 +46,23 @@ def for_loop(net, data_loader, train_optimizer):
         total_num += data.size(0)
         total_time += end_time - start_time
         total_loss += loss.item() * data.size(0)
-        preds.append(prediction.cpu())
-        targets.append(target.cpu())
-        data_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} FPS: {:.0f}'
-                                 .format(epoch, epochs, total_loss / total_num, total_num / total_time))
-    # compute metrics
-    preds = torch.cat(preds, dim=0)
-    targets = torch.cat(targets, dim=0)
-    pa, mpa, class_iou = compute_metrics(preds, targets, num_classes=10)
-    print('Train Epoch: [{}/{}] PA: {:.2f}% mPA: {:.2f}% mIOU: {:.2f}% '
-          .format(epoch, epochs, pa * 100, mpa * 100, class_iou * 100))
-    return total_loss / total_num, pa * 100, mpa * 100, class_iou * 100
+        # compute metrics
+        mask = target != 255
+        correct_pixel += torch.eq(pred, target)[mask].sum().item()
+        total_pixel += mask.sum().item()
+        for label in range(10):
+            tf_mask = (target == label) & mask
+            ft_mask = (pred == label) & mask
+            tt[label] += (tf_mask & ft_mask).sum()
+            tf[label] += tf_mask.sum()
+            ft[label] += ft_mask.sum()
+        pa = correct_pixel / max(total_pixel, 1)
+        mpa = (tt / torch.clamp(tf, min=1)).mean().item()
+        miou = (tt / torch.clamp(tf + ft - tt, min=1)).mean().item()
+        data_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} FPS: {:.0f} PA: {:.2f}% mPA: {:.2f}% mIOU: {:.2f}%'
+                                 .format(epoch, epochs, total_loss / total_num, total_num / total_time, pa * 100,
+                                         mpa * 100, miou * 100))
+    return total_loss / total_num, pa * 100, mpa * 100, miou * 100
 
 
 if __name__ == '__main__':
@@ -72,8 +79,7 @@ if __name__ == '__main__':
     # dataset, model setup, optimizer config and loss definition
     creat_dataset(data_path, num_classes=10, split='train')
     train_data = Tianchi(root=data_path, crop_size=256, split='train')
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=min(4, batch_size),
-                              drop_last=True)
+    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=min(4, batch_size))
     model = GatedSCNN(in_channels=4, num_classes=10).cuda()
     optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
     scheduler = LambdaLR(optimizer, lr_lambda=lambda eiter: math.pow(1 - eiter / epochs, 1.0))

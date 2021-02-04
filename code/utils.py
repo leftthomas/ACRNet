@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from tqdm import tqdm
 
 
 def get_palette():
@@ -44,23 +43,3 @@ class DualTaskLoss(nn.Module):
         num = torch.clamp(((edge > self.threshold) & mask).sum(), min=1)
         loss = (logit[edge > self.threshold]).sum() / num
         return loss
-
-
-def compute_metrics(preds, targets, num_classes, ignore_label=255):
-    correct_pixel, total_pixel = torch.zeros(1, device=preds.device), torch.zeros(1, device=preds.device)
-    class_tt = torch.zeros(num_classes, device=preds.device)
-    class_tf, class_ft = torch.zeros(num_classes, device=preds.device), torch.zeros(num_classes, device=preds.device)
-    for pred, target in tqdm(zip(preds, targets), desc='calculating the metrics', total=len(preds), dynamic_ncols=True):
-        mask = target != ignore_label
-        correct_pixel += torch.eq(pred, target)[mask].sum()
-        total_pixel += mask.sum()
-        for label in range(num_classes):
-            class_tf_mask = (target == label) & mask
-            class_ft_mask = (pred == label) & mask
-            class_tt[label] += (class_tf_mask & class_ft_mask).sum()
-            class_tf[label] += class_tf_mask.sum()
-            class_ft[label] += class_ft_mask.sum()
-    pa = correct_pixel / torch.clamp(total_pixel, min=1)
-    mpa = (class_tt / torch.clamp(class_tf, min=1)).mean()
-    class_iou = (class_tt / torch.clamp(class_tf + class_ft - class_tt, min=1)).mean()
-    return pa.item(), mpa.item(), class_iou.item()
