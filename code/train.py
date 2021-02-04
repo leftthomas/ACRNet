@@ -63,7 +63,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', default='../tcdata/suichang_round1_train_210120', type=str,
                         help='Data path for training dataset')
     parser.add_argument('--batch_size', default=16, type=int, help='Number of data for each batch to train')
-    parser.add_argument('--epochs', default=230, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--epochs', default=80, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--save_path', default='../user_data', type=str, help='Save path for results')
     # args parse
     args = parser.parse_args()
