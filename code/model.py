@@ -4,14 +4,13 @@ from torch.nn import functional as F
 from torchvision.models.resnet import BasicBlock
 from torchvision.models.segmentation.deeplabv3 import ASPP
 
+from wrn import wider_resnet38_a2, bnrelu
+
 
 class RegularStream(nn.Module):
-    def __init__(self, backbone_type='resnet50'):
+    def __init__(self, in_channels=4, norm_act=bnrelu):
         super().__init__()
-        if backbone_type == 'resnet50':
-            self.backbone = resnet50d(output_stride=8)
-        else:
-            self.backbone = resnet101d(output_stride=8)
+        self.backbone = wider_resnet38_a2(in_channels, norm_act=norm_act, dilation=True)
 
     def forward(self, x):
         x = self.backbone.conv1(x)
@@ -103,10 +102,10 @@ class FeatureFusion(ASPP):
 
 
 class GatedSCNN(nn.Module):
-    def __init__(self, in_channels=4, num_classes=10):
+    def __init__(self, in_channels=4, norm_act=bnrelu, num_classes=10):
         super().__init__()
 
-        self.regular_stream = RegularStream(backbone_type)
+        self.regular_stream = RegularStream(in_channels, norm_act)
         self.shape_stream = ShapeStream()
         self.feature_fusion = FeatureFusion(2048, (12, 24, 36), 256)
         self.seg = nn.Sequential(

@@ -14,12 +14,41 @@ class Mish(nn.Module):
         return x * torch.tanh(F.softplus(x))
 
 
+class GlobalAvgPool2d(nn.Module):
+    def __init__(self):
+        super(GlobalAvgPool2d, self).__init__()
+
+    def forward(self, inputs):
+        return torch.flatten(F.adaptive_avg_pool2d(inputs, (1, 1)), 1)
+
+
+class SoftPool2d(nn.Module):
+    def __init__(self, kernel_size, stride=None, padding=0, ceil_mode=False, count_include_pad=True,
+                 divisor_override=None):
+        super(SoftPool2d, self).__init__()
+        self.avgpool = nn.AvgPool2d(kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override)
+
+    def forward(self, x):
+        x_exp = torch.exp(x)
+        x_exp_pool = self.avgpool(x_exp)
+        x = self.avgpool(x_exp * x)
+        return x / x_exp_pool
+
+
 def bnrelu(channels):
     return nn.Sequential(nn.BatchNorm2d(channels), nn.ReLU(inplace=True))
 
 
 def bnmish(channels):
     return nn.Sequential(nn.BatchNorm2d(channels), Mish())
+
+
+def maxpool():
+    return nn.MaxPool2d(3, stride=2, padding=1)
+
+
+def softpool():
+    return SoftPool2d(2, stride=2, padding=0)
 
 
 class IdentityResidualBlock(nn.Module):
@@ -60,8 +89,7 @@ class IdentityResidualBlock(nn.Module):
         self.convs = nn.Sequential(OrderedDict(layers))
 
         if need_proj_conv:
-            self.proj_conv = nn.Conv2d(
-                in_channels, channels[-1], 1, stride=stride, padding=0, bias=False)
+            self.proj_conv = nn.Conv2d(in_channels, channels[-1], 1, stride=stride, padding=0, bias=False)
 
     def forward(self, x):
         if hasattr(self, 'proj_conv'):
@@ -77,9 +105,8 @@ class IdentityResidualBlock(nn.Module):
 
 
 class WiderResNetA2(nn.Module):
-    def __init__(self, structure, norm_act=bnrelu, num_classes=1000, dilation=False):
+    def __init__(self, structure, in_channels=3, norm_act=bnrelu, pool_func=maxpool, num_classes=1000, dilation=False):
         super(WiderResNetA2, self).__init__()
-        nn.Dropout = nn.Dropout2d
         self.structure = structure
         self.dilation = dilation
 
@@ -87,12 +114,12 @@ class WiderResNetA2(nn.Module):
             raise ValueError('Expected a structure with six values')
 
         # Initial layers
-        self.mod1 = torch.nn.Sequential(OrderedDict([('conv1', nn.Conv2d(3, 64, 3, stride=1, padding=1, bias=False))]))
+        self.mod1 = torch.nn.Sequential(
+            OrderedDict([('conv1', nn.Conv2d(in_channels, 64, 3, stride=1, padding=1, bias=False))]))
 
         # Groups of residual blocks
         in_channels = 64
-        channels = [(128, 128), (256, 256), (512, 512), (512, 1024), (512, 1024, 2048),
-                    (1024, 2048, 4096)]
+        channels = [(128, 128), (256, 256), (512, 512), (512, 1024), (512, 1024, 2048), (1024, 2048, 4096)]
         for mod_id, num in enumerate(structure):
             # Create blocks for module
             blocks = []
@@ -110,28 +137,27 @@ class WiderResNetA2(nn.Module):
                     stride = 2 if block_id == 0 and mod_id == 2 else 1
 
                 if mod_id == 4:
-                    drop = partial(nn.Dropout, p=0.3)
+                    drop = partial(nn.Dropout2d, p=0.3)
                 elif mod_id == 5:
-                    drop = partial(nn.Dropout, p=0.5)
+                    drop = partial(nn.Dropout2d, p=0.5)
                 else:
                     drop = None
 
                 blocks.append(('block%d' % (block_id + 1),
                                IdentityResidualBlock(in_channels, channels[mod_id], stride=stride, dilation=dil,
                                                      norm_act=norm_act, dropout=drop)))
-
                 # Update channels and p_keep
                 in_channels = channels[mod_id][-1]
 
             # Create module
             if mod_id < 2:
-                self.add_module('pool%d' % (mod_id + 2), nn.MaxPool2d(3, stride=2, padding=1))
+                self.add_module('pool%d' % (mod_id + 2), pool_func())
             self.add_module('mod%d' % (mod_id + 2), nn.Sequential(OrderedDict(blocks)))
 
         # Pooling and predictor
         self.bn_out = norm_act(in_channels)
         self.classifier = nn.Sequential(OrderedDict([
-            ('avg_pool', nn.AdaptiveAvgPool2d(1)),
+            ('avg_pool', GlobalAvgPool2d()),
             ('fc', nn.Linear(in_channels, num_classes))
         ]))
 
@@ -147,5 +173,6 @@ class WiderResNetA2(nn.Module):
         return self.classifier(out)
 
 
-def wider_resnet38_a2(norm_act=bnrelu, num_classes=1000, dilation=False):
-    return WiderResNetA2(structure=[3, 3, 6, 3, 1, 1], norm_act=norm_act, num_classes=num_classes, dilation=dilation)
+def wider_resnet38_a2(in_channels=3, norm_act=bnrelu, pool_func=maxpool, num_classes=1000, dilation=False):
+    return WiderResNetA2(structure=[3, 3, 6, 3, 1, 1], in_channels=in_channels, norm_act=norm_act,
+                         pool_func=pool_func, num_classes=num_classes, dilation=dilation)
