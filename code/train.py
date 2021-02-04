@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from dataset import creat_dataset, Tianchi
 from model import GatedSCNN
-from utils import BoundaryBCELoss, DualTaskLoss
+from utils import BoundaryBCELoss, DualTaskLoss, in_channels, num_classes, ignore_label
 
 # for reproducibility
 np.random.seed(1)
@@ -24,7 +24,7 @@ torch.manual_seed(1)
 def for_loop(net, data_loader, train_optimizer):
     net.train()
     total_loss, total_time, total_num, total_pixel, correct_pixel = 0.0, 0.0, 0, 0, 0
-    tt, tf, ft = torch.zeros(10).cuda(), torch.zeros(10).cuda(), torch.zeros(10).cuda()
+    tt, tf, ft = torch.zeros(num_classes).cuda(), torch.zeros(num_classes).cuda(), torch.zeros(num_classes).cuda()
     data_bar = tqdm(data_loader, dynamic_ncols=True)
     for data, grad, target, boundary, name in data_bar:
         data, grad, target, boundary = data.cuda(), grad.cuda(), target.cuda(), boundary.cuda()
@@ -47,10 +47,10 @@ def for_loop(net, data_loader, train_optimizer):
         total_time += end_time - start_time
         total_loss += loss.item() * data.size(0)
         # compute metrics
-        mask = target != 255
+        mask = target != ignore_label
         correct_pixel += torch.eq(pred, target)[mask].sum().item()
         total_pixel += mask.sum().item()
-        for label in range(10):
+        for label in range(num_classes):
             tf_mask = (target == label) & mask
             ft_mask = (pred == label) & mask
             tt[label] += (tf_mask & ft_mask).sum()
@@ -77,15 +77,15 @@ if __name__ == '__main__':
     data_path, batch_size, epochs, save_path = args.data_path, args.batch_size, args.epochs, args.save_path
 
     # dataset, model setup, optimizer config and loss definition
-    creat_dataset(data_path, num_classes=10, split='train')
+    creat_dataset(data_path, num_classes=num_classes, split='train')
     train_data = Tianchi(root=data_path, crop_size=256, split='train')
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=min(4, batch_size))
-    model = GatedSCNN(in_channels=4, num_classes=10).cuda()
+    model = GatedSCNN(in_channels=in_channels, num_classes=num_classes).cuda()
     optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
     scheduler = LambdaLR(optimizer, lr_lambda=lambda eiter: math.pow(1 - eiter / epochs, 1.0))
-    semantic_criterion = nn.CrossEntropyLoss(ignore_index=255)
-    edge_criterion = BoundaryBCELoss(ignore_index=255)
-    task_criterion = DualTaskLoss(threshold=0.8, ignore_index=255)
+    semantic_criterion = nn.CrossEntropyLoss(ignore_index=ignore_label)
+    edge_criterion = BoundaryBCELoss(ignore_index=ignore_label)
+    task_criterion = DualTaskLoss(threshold=0.8, ignore_index=ignore_label)
 
     results = {'train_loss': [], 'train_PA': [], 'train_mPA': [], 'train_mIOU': []}
     best_mIOU = 0.0

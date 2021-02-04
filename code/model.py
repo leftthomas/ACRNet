@@ -4,11 +4,12 @@ from torch.nn import functional as F
 from torchvision.models.resnet import BasicBlock
 from torchvision.models.segmentation.deeplabv3 import ASPP
 
+from utils import num_classes
 from wrn import wider_resnet38_a2, bnrelu, maxpool, bnmish, softpool
 
 
 class RegularStream(nn.Module):
-    def __init__(self, in_channels=4, norm_act=bnrelu, pool_func=maxpool):
+    def __init__(self, in_channels=3, norm_act=bnrelu, pool_func=maxpool):
         super().__init__()
         self.backbone = wider_resnet38_a2(in_channels, norm_act=norm_act, pool_func=pool_func, dilation=True)
 
@@ -106,7 +107,7 @@ class FeatureFusion(ASPP):
 
 
 class GatedSCNN(nn.Module):
-    def __init__(self, in_channels=4, norm_act=bnrelu, pool_func=maxpool, num_classes=10):
+    def __init__(self, in_channels=3, norm_act=bnrelu, pool_func=maxpool, num_classes=num_classes):
         super().__init__()
         assert norm_act in [bnrelu, bnmish] and pool_func in [maxpool, softpool], 'only support these types'
 

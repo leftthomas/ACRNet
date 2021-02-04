@@ -10,12 +10,14 @@ import numpy as np
 from scipy.ndimage.morphology import distance_transform_edt
 from torch.utils.data import Dataset
 
+from utils import ignore_label
+
 grad_progress = 0
 boundary_progress = 0
 
 
 class Tianchi(Dataset):
-    def __init__(self, root, crop_size=256, split='train', ignore_label=255):
+    def __init__(self, root, crop_size=256, split='train', ignore_label=ignore_label):
         self.crop_size = crop_size
         self.split = split
         self.ignore_label = ignore_label

@@ -2,15 +2,16 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-
-def get_palette():
-    palette = [177, 191, 122, 0, 128, 0, 128, 168, 93, 62, 51, 0, 128, 128, 0, 128, 128, 128,
-               192, 128, 0, 0, 128, 128, 132, 200, 173, 128, 64, 0]
-    return palette
+# constant values
+ignore_label = 255
+in_channels = 4
+num_classes = 10
+palette = [177, 191, 122, 0, 128, 0, 128, 168, 93, 62, 51, 0, 128, 128, 0, 128, 128, 128,
+           192, 128, 0, 0, 128, 128, 132, 200, 173, 128, 64, 0]
 
 
 class BoundaryBCELoss(nn.Module):
-    def __init__(self, ignore_index=255):
+    def __init__(self, ignore_index=ignore_label):
         super().__init__()
         self.ignore_index = ignore_index
 
@@ -31,7 +32,7 @@ class BoundaryBCELoss(nn.Module):
 
 
 class DualTaskLoss(nn.Module):
-    def __init__(self, threshold=0.8, ignore_index=255):
+    def __init__(self, threshold=0.8, ignore_index=ignore_label):
         super().__init__()
         self.threshold = threshold
         self.ignore_index = ignore_index

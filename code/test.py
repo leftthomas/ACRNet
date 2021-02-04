@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from dataset import creat_dataset, Tianchi
 from model import GatedSCNN
+from utils import in_channels, num_classes
 
 
 # loop all data to test
@@ -54,10 +55,10 @@ if __name__ == '__main__':
     data_path, model_weight, batch_size, save_path = args.data_path, args.model_weight, args.batch_size, args.save_path
 
     # dataset and model setup
-    creat_dataset(data_path, num_classes=10, split='test')
+    creat_dataset(data_path, num_classes=num_classes, split='test')
     test_data = Tianchi(root=data_path, crop_size=256, split='test')
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=min(4, batch_size))
-    model = GatedSCNN(in_channels=4, num_classes=10)
+    model = GatedSCNN(in_channels=in_channels, num_classes=num_classes)
     model.load_state_dict(torch.load(model_weight, map_location=torch.device('cpu')))
     model = model.cuda()
 

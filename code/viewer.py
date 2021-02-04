@@ -8,7 +8,7 @@ from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
 
 from model import GatedSCNN
-from utils import get_palette
+from utils import in_channels, num_classes, palette
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Predict segmentation result from a given image')
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     grad = torch.from_numpy(np.expand_dims(np.asarray(grad, np.float32) / 255.0, axis=0).copy()).unsqueeze(dim=0).cuda()
 
     # model load
-    model = GatedSCNN(in_channels=4, num_classes=10)
+    model = GatedSCNN(in_channels=in_channels, num_classes=num_classes)
     model.load_state_dict(torch.load(model_weight, map_location=torch.device('cpu')))
     model = model.cuda()
     model.eval()
@@ -40,11 +40,11 @@ if __name__ == '__main__':
         output, _ = model(image, grad)
         pred = torch.argmax(output, dim=1)
         pred_image = ToPILImage()(pred.byte().cpu())
-        pred_image.putpalette(get_palette())
+        pred_image.putpalette(palette)
         if 'test' not in input_pic:
             gt_image = torch.from_numpy(cv2.imread(input_pic.replace('.tif', '.png'), cv2.IMREAD_GRAYSCALE)) - 1
             gt_image = ToPILImage()(gt_image.unsqueeze(dim=0))
-            gt_image.putpalette(get_palette())
+            gt_image.putpalette(palette)
             images.append(gt_image)
         images.append(pred_image)
         # concat images
