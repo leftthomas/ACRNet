@@ -4,34 +4,35 @@ from torch.nn import functional as F
 from torchvision.models.resnet import BasicBlock
 from torchvision.models.segmentation.deeplabv3 import ASPP
 
-from wrn import wider_resnet38_a2, bnrelu
+from wrn import wider_resnet38_a2, bnrelu, maxpool
 
 
 class RegularStream(nn.Module):
-    def __init__(self, in_channels=4, norm_act=bnrelu):
+    def __init__(self, in_channels=4, norm_act=bnrelu, pool_func=maxpool):
         super().__init__()
-        self.backbone = wider_resnet38_a2(in_channels, norm_act=norm_act, dilation=True)
+        self.backbone = wider_resnet38_a2(in_channels, norm_act=norm_act, pool_func=pool_func, dilation=True)
 
     def forward(self, x):
-        x = self.backbone.conv1(x)
-        x = self.backbone.bn1(x)
-        x = self.backbone.act1(x)
-        res0 = self.backbone.maxpool(x)
+        res1 = self.backbone.mod1(x)
+        # 1/2
+        res2 = self.backbone.mod2(self.backbone.pool2(res1))
+        # 1/4
+        res3 = self.backbone.mod3(self.backbone.pool3(res2))
+        # 1/8
+        res4 = self.backbone.mod4(res3)
+        res5 = self.backbone.mod5(res4)
+        res6 = self.backbone.mod6(res5)
+        res7 = self.backbone.mod7(res6)
 
-        res1 = self.backbone.layer1(res0)
-        res2 = self.backbone.layer2(res1)
-        res3 = self.backbone.layer3(res2)
-        res4 = self.backbone.layer4(res3)
-
-        return x, res1, res2, res3, res4
+        return res1, res2, res3, res4, res7
 
 
 class ShapeStream(nn.Module):
     def __init__(self):
         super().__init__()
-        self.res2_conv = nn.Conv2d(512, 1, 1)
-        self.res3_conv = nn.Conv2d(1024, 1, 1)
-        self.res4_conv = nn.Conv2d(2048, 1, 1)
+        self.res3_conv = nn.Conv2d(256, 1, 1)
+        self.res4_conv = nn.Conv2d(512, 1, 1)
+        self.res7_conv = nn.Conv2d(4096, 1, 1)
         self.res1 = BasicBlock(64, 64, 1)
         self.res2 = BasicBlock(32, 32, 1)
         self.res3 = BasicBlock(16, 16, 1)
@@ -44,17 +45,17 @@ class ShapeStream(nn.Module):
         self.gate = nn.Conv2d(8, 1, 1, bias=False)
         self.fuse = nn.Conv2d(2, 1, 1, bias=False)
 
-    def forward(self, x, res2, res3, res4, grad):
+    def forward(self, res1, res3, res4, res7, grad):
         size = grad.size()[-2:]
-        x = F.interpolate(x, size, mode='bilinear', align_corners=True)
-        res2 = F.interpolate(self.res2_conv(res2), size, mode='bilinear', align_corners=True)
         res3 = F.interpolate(self.res3_conv(res3), size, mode='bilinear', align_corners=True)
         res4 = F.interpolate(self.res4_conv(res4), size, mode='bilinear', align_corners=True)
+        res7 = F.interpolate(self.res7_conv(res7), size, mode='bilinear', align_corners=True)
 
-        gate1 = self.gate1(self.res1_pre(self.res1(x)), res2)
-        gate2 = self.gate2(self.res2_pre(self.res2(gate1)), res3)
-        gate3 = self.gate3(self.res3_pre(self.res3(gate2)), res4)
+        gate1 = self.gate1(self.res1_pre(self.res1(res1)), res3)
+        gate2 = self.gate2(self.res2_pre(self.res2(gate1)), res4)
+        gate3 = self.gate3(self.res3_pre(self.res3(gate2)), res7)
         gate = torch.sigmoid(self.gate(gate3))
+        # C = 1
         feat = torch.sigmoid(self.fuse(torch.cat((gate, grad), dim=1)))
         return gate, feat
 
@@ -86,28 +87,28 @@ class FeatureFusion(ASPP):
             nn.BatchNorm2d(out_channels),
             nn.ReLU())
         self.project = nn.Conv2d((len(atrous_rates) + 3) * out_channels, out_channels, 1, bias=False)
-        self.fine = nn.Conv2d(256, 48, kernel_size=1, bias=False)
+        self.fine = nn.Conv2d(128, 48, kernel_size=1, bias=False)
 
-    def forward(self, res1, res4, feat):
+    def forward(self, res2, res7, feat):
         res = []
         for conv in self.convs:
-            res.append(conv(res4))
+            res.append(conv(res7))
         res = torch.cat(res, dim=1)
         feat = F.interpolate(feat, res.size()[-2:], mode='bilinear', align_corners=True)
         res = torch.cat((res, self.shape_conv(feat)), dim=1)
-        coarse = F.interpolate(self.project(res), res1.size()[-2:], mode='bilinear', align_corners=True)
-        fine = self.fine(res1)
+        coarse = F.interpolate(self.project(res), res2.size()[-2:], mode='bilinear', align_corners=True)
+        fine = self.fine(res2)
         out = torch.cat((coarse, fine), dim=1)
         return out
 
 
 class GatedSCNN(nn.Module):
-    def __init__(self, in_channels=4, norm_act=bnrelu, num_classes=10):
+    def __init__(self, in_channels=4, norm_act=bnrelu, pool_func=maxpool, num_classes=10):
         super().__init__()
 
-        self.regular_stream = RegularStream(in_channels, norm_act)
+        self.regular_stream = RegularStream(in_channels, norm_act, pool_func)
         self.shape_stream = ShapeStream()
-        self.feature_fusion = FeatureFusion(2048, (12, 24, 36), 256)
+        self.feature_fusion = FeatureFusion(4096, 256)
         self.seg = nn.Sequential(
             nn.Conv2d(256 + 48, 256, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -118,9 +119,9 @@ class GatedSCNN(nn.Module):
             nn.Conv2d(256, num_classes, kernel_size=1, bias=False))
 
     def forward(self, x, grad):
-        x, res1, res2, res3, res4 = self.regular_stream(x)
-        gate, feat = self.shape_stream(x, res2, res3, res4, grad)
-        out = self.feature_fusion(res1, res4, feat)
+        res1, res2, res3, res4, res7 = self.regular_stream(x)
+        gate, feat = self.shape_stream(res1, res3, res4, res7, grad)
+        out = self.feature_fusion(res2, res7, feat)
         seg = F.interpolate(self.seg(out), grad.size()[-2:], mode='bilinear', align_corners=False)
         # [B, N, H, W], [B, 1, H, W]
         return seg, gate
