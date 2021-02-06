@@ -35,7 +35,7 @@ def for_loop(net, data_loader, save_root):
                 os.makedirs(save_root)
             for pred_tensor, pred_name in zip(prediction, name):
                 # revert train id to regular id
-                prediction += 1
+                pred_tensor += 1
                 pred_img = ToPILImage()(pred_tensor.unsqueeze(dim=0).byte().cpu())
                 pred_name = pred_name.replace('.tif', '.png')
                 pred_img.save('{}/{}'.format(save_root, pred_name))
