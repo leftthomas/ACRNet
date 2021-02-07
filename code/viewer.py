@@ -5,10 +5,10 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
-from torchvision.transforms import ToPILImage, ToTensor
+from torchvision.transforms import ToPILImage, ToTensor, Normalize
 
 from model import GatedSCNN
-from utils import in_channels, num_classes, palette
+from utils import in_channels, num_classes, palette, means, stds
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Predict segmentation result from a given image')
@@ -25,7 +25,8 @@ if __name__ == '__main__':
     target = Image.new('RGB', (image_width * num_width, image_height))
     images = [image.convert('RGB')]
 
-    image = ToTensor()(cv2.imread(input_pic, cv2.IMREAD_UNCHANGED)[:, :, ::-1].copy()).unsqueeze(dim=0).cuda()
+    image = np.asarray(cv2.imread(input_pic, cv2.IMREAD_UNCHANGED), np.float32)[:, :, ::-1].copy()
+    image = Normalize(means, stds)(ToTensor()(image)).unsqueeze(dim=0).cuda()
     grad = cv2.Canny(cv2.imread(input_pic, cv2.IMREAD_COLOR), 10, 100)
     grad = torch.from_numpy(np.expand_dims(np.asarray(grad, np.float32) / 255.0, axis=0).copy()).unsqueeze(dim=0).cuda()
 
