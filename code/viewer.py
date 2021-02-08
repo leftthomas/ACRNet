@@ -25,7 +25,7 @@ if __name__ == '__main__':
     target = Image.new('RGB', (image_width * num_width, image_height))
     images = [image.convert('RGB')]
 
-    image = np.asarray(cv2.imread(input_pic, cv2.IMREAD_UNCHANGED), np.float32)[:, :, ::-1].copy()
+    image = cv2.imread(input_pic, cv2.IMREAD_UNCHANGED)[:, :, ::-1].copy()
     image = Normalize(means, stds)(ToTensor()(image)).unsqueeze(dim=0).cuda()
     grad = cv2.Canny(cv2.imread(input_pic, cv2.IMREAD_COLOR), 10, 100)
     grad = torch.from_numpy(np.expand_dims(np.asarray(grad, np.float32) / 255.0, axis=0).copy()).unsqueeze(dim=0).cuda()
