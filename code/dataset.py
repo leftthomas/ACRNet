@@ -10,7 +10,7 @@ import numpy as np
 from scipy.ndimage.morphology import distance_transform_edt
 from torch.utils.data import Dataset
 
-from utils import ignore_label, means, stds
+from utils import ignore_label
 
 grad_progress = 0
 boundary_progress = 0
@@ -68,8 +68,6 @@ class Tianchi(Dataset):
         image = image[:, :, ::-1]
         # normalization
         image /= 255.0
-        image -= means
-        image /= stds
         grad /= 255.0
 
         # random crop
