@@ -101,20 +101,13 @@ class Tianchi(Dataset):
 
         # HWC -> CHW
         image = image.transpose((2, 0, 1))
-        # random flip
+        # random horizontal flip
         if self.split == 'train':
-            # horizontal
             flip = np.random.choice(2) * 2 - 1
             image = image[:, :, ::flip]
             grad = grad[:, ::flip]
             label = label[:, ::flip]
             boundary = boundary[:, ::flip]
-            # vertical
-            flip = np.random.choice(2) * 2 - 1
-            image = image[:, ::flip, :]
-            grad = grad[::flip, :]
-            label = label[::flip, :]
-            boundary = boundary[::flip, :]
 
         if self.split == 'train':
             label = np.asarray(label, np.long)

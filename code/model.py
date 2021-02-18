@@ -113,8 +113,7 @@ class GatedSCNN(nn.Module):
 
         self.regular_stream = RegularStream(in_channels, norm_act, pool_func)
         self.shape_stream = ShapeStream(norm_act)
-        self.feature_fusion = FeatureFusion(in_channels=4096, atrous_rates=(12, 24, 36), out_channels=256,
-                                            norm_act=norm_act)
+        self.feature_fusion = FeatureFusion(in_channels=4096, out_channels=256, norm_act=norm_act)
         self.seg = nn.Sequential(
             nn.Conv2d(256 + 48, 256, kernel_size=3, padding=1, bias=False),
             norm_act(256),

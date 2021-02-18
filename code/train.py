@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn
+from torch.backends import cudnn
 from torch.optim import SGD
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
@@ -18,6 +19,8 @@ from utils import BoundaryBCELoss, DualTaskLoss, in_channels, num_classes, ignor
 # for reproducibility
 np.random.seed(1)
 torch.manual_seed(1)
+cudnn.deterministic = True
+cudnn.benchmark = False
 
 
 # train for one epoch
