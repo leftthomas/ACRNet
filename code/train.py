@@ -45,6 +45,7 @@ def for_loop(net, data_loader, train_optimizer):
         train_optimizer.zero_grad()
         loss.backward()
         train_optimizer.step()
+        scheduler.step()
 
         total_num += data.size(0)
         total_time += end_time - start_time
@@ -86,7 +87,8 @@ if __name__ == '__main__':
                               drop_last=True)
     model = GatedSCNN(in_channels=in_channels, num_classes=num_classes).cuda()
     optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
-    scheduler = LambdaLR(optimizer, lr_lambda=lambda eiter: math.pow(1 - eiter / epochs, 1.0))
+    iters = epochs * (len(train_data) // batch_size)
+    scheduler = LambdaLR(optimizer, lr_lambda=lambda eiter: math.pow(1 - eiter / iters, 1.0))
     semantic_criterion = nn.CrossEntropyLoss(ignore_index=ignore_label)
     edge_criterion = BoundaryBCELoss(ignore_index=ignore_label)
     task_criterion = DualTaskLoss(threshold=0.8, ignore_index=ignore_label)
@@ -100,7 +102,6 @@ if __name__ == '__main__':
         results['train_PA'].append(train_PA)
         results['train_mPA'].append(train_mPA)
         results['train_mIOU'].append(train_mIOU)
-        scheduler.step()
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
         data_frame.to_csv('{}/statistics.csv'.format(save_path), index_label='epoch')
