@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from kornia.filters import spatial_gradient
 from torch import nn
 
 # constant values
@@ -42,5 +43,20 @@ class DualTaskLoss(nn.Module):
         logit = F.cross_entropy(seg, target, ignore_index=self.ignore_index, reduction='none')
         mask = target != self.ignore_index
         num = torch.clamp(((edge > self.threshold) & mask).sum(), min=1)
-        loss = (logit[edge > self.threshold]).sum() / num
+        reg_l_loss = (logit[edge > self.threshold]).sum() / num
+
+        logit = torch.where(mask.unsqueeze(dim=1), seg, torch.zeros_like(seg))
+        target = torch.where(mask, target, torch.zeros_like(target))
+        logit = F.gumbel_softmax(logit, tau=0.5, dim=1)
+        target = F.one_hot(target, num_classes=seg.size(1)).permute(0, 3, 1, 2).float()
+        target = F.gumbel_softmax(target, tau=0.5, dim=1)
+        logit_grad = spatial_gradient(logit)
+        logit_mag = torch.norm(logit_grad, dim=-3)
+        target_grad = spatial_gradient(target)
+        target_mag = torch.norm(target_grad, dim=-3)
+        reg_r_loss = F.l1_loss(logit_mag, target_mag, reduction='none')
+        mask = ((logit_mag >= 1e-8) | (target_mag >= 1e-8)) & mask.unsqueeze(dim=1)
+        num = torch.clamp(mask.sum(), min=1)
+        reg_r_loss = reg_r_loss[mask].sum() / num
+        loss = reg_l_loss + reg_r_loss
         return loss
