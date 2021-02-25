@@ -54,7 +54,8 @@ and official implementation:
 
 1. `Multi-scale training` is used, the scale is random selected from `[0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]`;
 2. The `poly lr scheduler` is called each iter;
-3. `SoftPool` is used to replace the `MaxPool`.
+3. The non-differentiable part of `dual task loss` is not used;
+4. `SoftPool` is used to replace the `MaxPool`.
 
 <table>
 	<tbody>
