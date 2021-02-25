@@ -47,7 +47,7 @@ optional arguments:
 --input_pic                   Path to the input picture [default value is '../tcdata/suichang_round1_test_partA_210120/000001.tif']
 ```
 
-## Results
+## Notes
 
 The experiment is conducted on one NVIDIA TITAN RTX (24G) GPU, and there are some difference between this implementation
 and official implementation:
@@ -56,50 +56,3 @@ and official implementation:
 2. The `poly lr scheduler` is called each iter;
 3. The non-differentiable part of `dual task loss` is not used;
 4. `SoftPool` is used to replace the `MaxPool`.
-
-<table>
-	<tbody>
-		<!-- START TABLE -->
-		<!-- TABLE HEADER -->
-		<th>Phase</th>
-		<th>A mIOU</th>
-		<th>B mIOU</th>
-		<th>A Rank</th>
-		<th>B Rank</th>
-		<th>FPS</th>
-		<th>Download</th>
-		<!-- TABLE BODY -->
-		<tr>
-			<td align="center">Stage 1</td>
-			<td align="center">81.8</td>
-			<td align="center">81.8</td>
-			<td align="center">58.0</td>
-			<td align="center">81.7</td>
-			<td align="center">197</td>
-			<td align="center"><a href="https://pan.baidu.com/s/1cmcAtDewYs2lWK7LaktofQ">eg6a</a></td>
-		</tr>
-		<tr>
-			<td align="center">Stage 2</td>
-			<td align="center">81.8</td>
-			<td align="center">81.8</td>
-			<td align="center">58.0</td>
-			<td align="center">81.7</td>
-			<td align="center">197</td>
-			<td align="center"><a href="https://pan.baidu.com/s/1cmcAtDewYs2lWK7LaktofQ">eg6a</a></td>
-		</tr>
-		<tr>
-			<td align="center">Final Stage</td>
-			<td align="center">81.8</td>
-			<td align="center">81.8</td>
-			<td align="center">58.0</td>
-			<td align="center">81.7</td>
-			<td align="center">197</td>
-			<td align="center"><a href="https://pan.baidu.com/s/1cmcAtDewYs2lWK7LaktofQ">eg6a</a></td>
-		</tr>
-	</tbody>
-</table>
-
-The left is the input image, the middle is ground truth segmentation, and the right is model's predicted segmentation.
-
-![munster_000120_000019](result.png)
-
