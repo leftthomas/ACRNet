@@ -30,7 +30,7 @@ optional arguments:
 ### Test model
 
 ```
-python test.py --data_path ../tcdata/suichang_round2_test_partB_210316
+python test.py --data_path ../tcdata/suichang_round1_test_partB_210120
 optional arguments:
 --data_path                   Data path for testing dataset [default value is '../tcdata/suichang_round1_test_partA_210120']
 --model_weight                Pretrained model weight [default value is '../user_data/model.pth']
