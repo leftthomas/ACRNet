@@ -5,7 +5,9 @@ import random
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image
+from bidict import bidict
 from torch.backends import cudnn
 from torch.utils.data.dataset import Dataset
 from torchvision import transforms
@@ -39,39 +41,71 @@ def parse_common_args():
     return parser
 
 
-def get_transform(split='train'):
-    if split == 'train':
+class AddStyleCode(torch.nn.Module):
+    def __init__(self, style_num=0):
+        super().__init__()
+        self.style_num = style_num
+
+    def forward(self, tensor):
+        if self.style_num != 0:
+            tensor = tensor.unsqueeze(dim=0).expand(self.style_num, *tensor.size())
+            styles = F.one_hot(torch.arange(self.style_num), num_classes=self.style_num)
+            styles = styles.view(*styles.size(), 1, 1).expand(*styles.size(), *tensor.size()[-2:])
+            tensor = torch.cat((tensor, styles), dim=1)
+        return tensor
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(style_num={0})'.format(self.style_num)
+
+
+def get_transform(train=True, style_num=0):
+    if train:
         return transforms.Compose([
             transforms.RandomResizedCrop(224, (1.0, 1.14)),
             transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
             transforms.RandomGrayscale(p=0.2),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            AddStyleCode(style_num)])
     else:
         return transforms.Compose([
             transforms.Resize(224),
+            transforms.CenterCrop(224),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            AddStyleCode(style_num)])
 
 
 class DomainDataset(Dataset):
-    def __init__(self, data_root, data_name, domains, split='train'):
+    def __init__(self, data_root, data_name, domains, train=True, style_num=0):
         super(DomainDataset, self).__init__()
+        assert len(domains) == 2
+        if data_name == 'pacs':
+            for domain in domains:
+                assert domain in ['art', 'cartoon', 'photo', 'sketch']
+        else:
+            for domain in domains:
+                assert domain in ['art', 'clipart', 'product', 'real']
 
         self.data_name = data_name
         self.domains = domains
-        self.images, self.categories, self.labels = [], [], []
+        self.images, self.categories, self.labels, self.classes, j = [], [], [], {}, 0
         for i, domain in enumerate(self.domains):
-            images = sorted(glob.glob(os.path.join(data_root, data_name, split, domain, '*.png')))
+            images = sorted(glob.glob(os.path.join(data_root, data_name, domain, '*', '*.jpg')))
             # which image
             self.images += images
             # which domain
             self.categories += [i] * len(images)
-            # which instance
-            self.labels += range(0, len(images))
-            self.num_class = len(images)
-        self.transform = get_transform(split)
+            # which label
+            for image in images:
+                label = os.path.dirname(image).split('/')[-1]
+                if label not in self.classes:
+                    self.classes[label] = j
+                    j += 1
+                self.labels.append(self.classes[label])
+        self.classes = bidict(self.classes)
+        self.transform = get_transform(train, style_num)
 
     def __getitem__(self, index):
         img_name = self.images[index]

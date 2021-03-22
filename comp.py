@@ -13,9 +13,9 @@ from utils import DomainDataset, val_contrast, parse_common_args
 parser = parse_common_args()
 # args parse
 args = parser.parse_args()
-data_root, data_name, method_name, proj_dim = args.data_root, args.data_name, args.method_name, args.proj_dim
-temperature, batch_size, total_iter = args.temperature, args.batch_size, args.total_iter
-ranks, save_root = args.ranks, args.save_root
+data_root, data_name, method_name, train_domains = args.data_root, args.data_name, args.method_name, args.train_domains
+val_domains, proj_dim, temperature, batch_size = args.val_domains, args.proj_dim, args.temperature, args.batch_size
+total_iter, ranks, save_root = args.total_iter, args.ranks, args.save_root
 # asserts
 assert method_name != 'ossco', 'not support for {}'.format(method_name)
 
@@ -34,10 +34,10 @@ if method_name == 'npid':
 elif method_name == 'simclr':
     loss_criterion = SimCLRLoss(temperature)
 elif method_name == 'proxyanchor':
-    loss_criterion = ProxyAnchorLoss(train_data.num_class, proj_dim).cuda()
+    loss_criterion = ProxyAnchorLoss(train_data.classes, proj_dim).cuda()
     loss_optimizer = Adam(loss_criterion.parameters(), lr=1e-3, weight_decay=1e-6)
 elif method_name == 'softtriple':
-    loss_criterion = SoftTripleLoss(train_data.num_class, proj_dim).cuda()
+    loss_criterion = SoftTripleLoss(train_data.classes, proj_dim).cuda()
     loss_optimizer = Adam(loss_criterion.parameters(), lr=1e-3, weight_decay=1e-6)
 
 results = {'train_loss': [], 'val_precise': []}

@@ -12,7 +12,7 @@ from torch.utils.data.dataloader import DataLoader
 from torchvision.utils import save_image
 from tqdm import tqdm
 
-from model import Backbone, Generator, Discriminator, OSSCoLoss
+from model import Backbone, Generator, Discriminator, SimCLRLoss
 from utils import DomainDataset, weights_init_normal, ReplayBuffer, parse_common_args, get_transform, val_contrast
 
 parser = parse_common_args()
@@ -22,18 +22,18 @@ parser.add_argument('--rounds', default=5, type=int, help='Number of round to tr
 
 # args parse
 args = parser.parse_args()
-data_root, data_name, method_name, proj_dim = args.data_root, args.data_name, args.method_name, args.proj_dim
-temperature, batch_size = args.temperature, args.batch_size
+data_root, data_name, method_name, train_domains = args.data_root, args.data_name, args.method_name, args.train_domains
+val_domains, proj_dim, temperature, batch_size = args.val_domains, args.proj_dim, args.temperature, args.batch_size
 style_num, gan_iter, contrast_iter = args.style_num, args.gan_iter, args.total_iter
 ranks, save_root, rounds = args.ranks, args.save_root, args.rounds
 # asserts
-assert method_name == 'ossco', 'not support for {}'.format(method_name)
+assert method_name == 'zsco', 'not support for {}'.format(method_name)
 
 # data prepare
-train_contrast_data = DomainDataset(data_root, data_name, split='train')
+train_contrast_data = DomainDataset(data_root, data_name, train_domains, train=True)
 train_contrast_loader = DataLoader(train_contrast_data, batch_size=batch_size, shuffle=True, num_workers=8,
                                    drop_last=True)
-val_data = DomainDataset(data_root, data_name, split='val')
+val_data = DomainDataset(data_root, data_name, val_domains, train=False)
 val_contrast_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=8)
 val_gan_loader = DataLoader(val_data, batch_size=1, shuffle=False, num_workers=8)
 
@@ -45,7 +45,7 @@ optimizer_backbone = Adam(backbone.parameters(), lr=1e-3, weight_decay=1e-6)
 # loss setup
 criterion_adversarial = torch.nn.MSELoss()
 criterion_cycle = torch.nn.L1Loss()
-criterion_contrast = OSSCoLoss(temperature)
+criterion_contrast = SimCLRLoss(temperature)
 
 contrast_results = {'train_loss': [], 'val_precise': []}
 save_name_pre = '{}_{}_{}_{}_{}'.format(data_name, method_name, style_num, rounds, gan_iter)
@@ -56,56 +56,50 @@ best_precise, total_contrast_loss = 0.0, 0.0
 # training loop
 for r in range(1, rounds + 1):
     # each round should refresh style images
-    train_gan_data = DomainDataset(data_root, data_name, split='train')
+    train_gan_data = DomainDataset(data_root, data_name, train_domains, train=True, style_num=style_num)
     style_images, style_names, style_categories, style_labels = train_gan_data.refresh(style_num)
     train_gan_loader = DataLoader(train_gan_data, batch_size=1, shuffle=True, num_workers=8)
-    # use different F, G, DF and DG
-    Fs = [Generator(3, 3).cuda() for _ in range(style_num)]
-    Gs = [Generator(3, 3).cuda() for _ in range(style_num)]
-    DFs = [Discriminator(3).cuda() for _ in range(style_num)]
-    DGs = [Discriminator(3).cuda() for _ in range(style_num)]
-    for F, G, DF, DG in zip(Fs, Gs, DFs, DGs):
-        F.apply(weights_init_normal)
-        G.apply(weights_init_normal)
-        DF.apply(weights_init_normal)
-        DG.apply(weights_init_normal)
-    optimizer_FGs = [Adam(itertools.chain(F.parameters(), G.parameters()), lr=2e-4, betas=(0.5, 0.999)) for F, G in
-                     zip(Fs, Gs)]
-    optimizer_DFs = [Adam(DF.parameters(), lr=2e-4, betas=(0.5, 0.999)) for DF in DFs]
-    optimizer_DGs = [Adam(DG.parameters(), lr=2e-4, betas=(0.5, 0.999)) for DG in DGs]
+    # use conditional F, G, DF and DG
+    F = Generator(3 + style_num, 3).cuda()
+    G = Generator(3 + style_num, 3).cuda()
+    DF = Discriminator(3 + style_num).cuda()
+    DG = Discriminator(3 + style_num).cuda()
+    F.apply(weights_init_normal)
+    G.apply(weights_init_normal)
+    DF.apply(weights_init_normal)
+    DG.apply(weights_init_normal)
+    optimizer_FG = Adam(itertools.chain(F.parameters(), G.parameters()), lr=2e-4, betas=(0.5, 0.999))
+    optimizer_DF = Adam(DF.parameters(), lr=2e-4, betas=(0.5, 0.999))
+    optimizer_DG = Adam(DG.parameters(), lr=2e-4, betas=(0.5, 0.999))
 
     # compute macs and params
     if r == 1:
-        macs_f, params_f = profile(Fs[0], inputs=(torch.randn(1, 3, 256, 256).cuda(),), verbose=False)
-        macs_df, params_df = profile(DFs[0], inputs=(torch.randn(1, 3, 256, 256).cuda(),), verbose=False)
-        macs, params = clever_format([(macs_f + macs_df) * 2 * style_num, (params_f + params_df) * 2 * style_num],
-                                     '%.2f')
+        macs_f, params_f = profile(F, inputs=(torch.randn(style_num, 3 + style_num, 224, 224).cuda(),), verbose=False)
+        macs_df, params_df = profile(DF, inputs=(torch.randn(style_num, 3 + style_num, 224, 224).cuda(),),
+                                     verbose=False)
+        macs, params = clever_format([(macs_f + macs_df) * 2, (params_f + params_df) * 2], '%.2f')
         print('Params: {}; MACs: {}'.format(params, macs))
 
     fake_style_buffer = [ReplayBuffer() for _ in range(style_num)]
     fake_content_buffer = [ReplayBuffer() for _ in range(style_num)]
     gan_epochs = (gan_iter // len(train_gan_data)) + 1
     contrast_epochs = (contrast_iter // (len(train_contrast_data) // batch_size)) + 1
-    gan_results = {'train_fg_loss': [], 'train_dfs_loss': [], 'train_dgs_loss': []}
-    total_fg_loss, total_dfs_loss, total_dgs_loss, current_gan_iter, current_contrast_iter = 0.0, 0.0, 0.0, 0, 0
+    gan_results = {'train_fg_loss': [], 'train_df_loss': [], 'train_dg_loss': []}
+    total_fg_loss, total_df_loss, total_dg_loss, current_gan_iter, current_contrast_iter = 0.0, 0.0, 0.0, 0, 0
 
-    lr_scheduler_FGs = [LambdaLR(optimizer_FG,
-                                 lr_lambda=lambda eiter: 1.0 - max(0, eiter - gan_iter // 2) / float(gan_iter // 2))
-                        for optimizer_FG in optimizer_FGs]
-    lr_scheduler_DFs = [LambdaLR(optimizer_DF,
-                                 lr_lambda=lambda eiter: 1.0 - max(0, eiter - gan_iter // 2) / float(gan_iter // 2))
-                        for optimizer_DF in optimizer_DFs]
-    lr_scheduler_DGs = [LambdaLR(optimizer_DG,
-                                 lr_lambda=lambda eiter: 1.0 - max(0, eiter - gan_iter // 2) / float(gan_iter // 2))
-                        for optimizer_DG in optimizer_DGs]
+    lr_scheduler_FG = LambdaLR(optimizer_FG,
+                               lr_lambda=lambda eiter: 1.0 - max(0, eiter - gan_iter // 2) / float(gan_iter // 2))
+    lr_scheduler_DF = LambdaLR(optimizer_DF,
+                               lr_lambda=lambda eiter: 1.0 - max(0, eiter - gan_iter // 2) / float(gan_iter // 2))
+    lr_scheduler_DG = LambdaLR(optimizer_DG,
+                               lr_lambda=lambda eiter: 1.0 - max(0, eiter - gan_iter // 2) / float(gan_iter // 2))
 
     # GAN training loop
     for epoch in range(1, gan_epochs + 1):
-        for F, G, DF, DG in zip(Fs, Gs, DFs, DGs):
-            F.train()
-            G.train()
-            DF.train()
-            DG.train()
+        F.train()
+        G.train()
+        DF.train()
+        DG.train()
         train_bar = tqdm(train_gan_loader, dynamic_ncols=True)
         for content, _, _, _, _, _ in train_bar:
             content = content.cuda()
@@ -145,7 +139,7 @@ for r in range(1, rounds + 1):
                 adversarial_loss.backward()
                 optimizer_DF.step()
                 lr_scheduler_DF.step()
-                total_dfs_loss += adversarial_loss.item() / style_num
+                total_df_loss += adversarial_loss.item() / style_num
                 # DG
                 optimizer_DG.zero_grad()
                 pred_real_style = DG(style)
@@ -158,16 +152,16 @@ for r in range(1, rounds + 1):
                 adversarial_loss.backward()
                 optimizer_DG.step()
                 lr_scheduler_DG.step()
-                total_dgs_loss += adversarial_loss.item() / style_num
+                total_dg_loss += adversarial_loss.item() / style_num
 
             current_gan_iter += 1
             train_bar.set_description('[{}/{}] Train Iter: [{}/{}] FG Loss: {:.4f}, DFs Loss: {:.4f}, DGs Loss: {:.4f}'
                                       .format(r, rounds, current_gan_iter, gan_iter, total_fg_loss / current_gan_iter,
-                                              total_dfs_loss / current_gan_iter, total_dgs_loss / current_gan_iter))
+                                              total_df_loss / current_gan_iter, total_dg_loss / current_gan_iter))
             if current_gan_iter % 100 == 0:
                 gan_results['train_fg_loss'].append(total_fg_loss / current_gan_iter)
-                gan_results['train_dfs_loss'].append(total_dfs_loss / current_gan_iter)
-                gan_results['train_dgs_loss'].append(total_dgs_loss / current_gan_iter)
+                gan_results['train_dfs_loss'].append(total_df_loss / current_gan_iter)
+                gan_results['train_dgs_loss'].append(total_dg_loss / current_gan_iter)
                 # save statistics
                 data_frame = pd.DataFrame(data=gan_results, index=range(1, current_gan_iter // 100 + 1))
                 save_path = '{}/{}/round-{}/results.csv'.format(save_root, save_name_pre, r)

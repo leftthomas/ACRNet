@@ -25,6 +25,12 @@ pip install pytorch-metric-learning
 pip install thop
 ```
 
+- bidict
+
+```
+pip install bidict
+```
+
 ## Dataset
 
 [PACS](https://domaingeneralization.github.io) and [Office-Home](https://www.hemanthdv.org/officeHomeDataset.html)
