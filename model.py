@@ -185,13 +185,3 @@ class NPIDLoss(nn.Module):
         pos_samples = proj.detach().cpu() * self.momentum + pos_samples * (1.0 - self.momentum)
         pos_samples = F.normalize(pos_samples, dim=-1)
         self.bank.index_copy_(0, pos_index, pos_samples)
-
-
-class OSSCoLoss(nn.Module):
-    def __init__(self, temperature):
-        super(OSSCoLoss, self).__init__()
-        self.simclr_loss = SimCLRLoss(temperature)
-
-    def forward(self, proj_1, proj_2, proj_3):
-        loss = self.simclr_loss(proj_1, proj_2) + self.simclr_loss(proj_1, proj_3)
-        return loss

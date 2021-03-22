@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 def parse_common_args():
     # for reproducibility
+    random.seed(1)
     np.random.seed(1)
     torch.manual_seed(1)
     cudnn.deterministic = True
@@ -21,16 +22,19 @@ def parse_common_args():
     # common args
     parser = argparse.ArgumentParser(description='Train Model')
     parser.add_argument('--data_root', default='data', type=str, help='Datasets root path')
-    parser.add_argument('--data_name', default='cityscapes', type=str, choices=['cityscapes', 'cufsf'],
-                        help='Dataset name')
-    parser.add_argument('--method_name', default='ossco', type=str,
-                        choices=['ossco', 'simclr', 'npid', 'proxyanchor', 'softtriple', 'pretrained'],
+    parser.add_argument('--data_name', default='pacs', type=str, choices=['pacs', 'office'], help='Dataset name')
+    parser.add_argument('--method_name', default='zsco', type=str,
+                        choices=['zsco', 'simclr', 'npid', 'proxyanchor', 'softtriple', 'pretrained'],
                         help='Compared method name')
+    parser.add_argument('--train_domains', nargs='+', default=['cartoon', 'photo'], type=str,
+                        help='Selected domains to train')
+    parser.add_argument('--val_domains', nargs='+', default=['sketch', 'art'], type=str,
+                        help='Selected domains to val')
     parser.add_argument('--proj_dim', default=128, type=int, help='Projected feature dim for computing loss')
     parser.add_argument('--temperature', default=0.1, type=float, help='Temperature used in softmax')
-    parser.add_argument('--batch_size', default=16, type=int, help='Number of images in each mini-batch')
+    parser.add_argument('--batch_size', default=32, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--total_iter', default=10000, type=int, help='Number of bp to train')
-    parser.add_argument('--ranks', nargs='+', default=[1, 2, 4, 8], type=int, help='Selected recall to val')
+    parser.add_argument('--ranks', nargs='+', default=[1, 5, 10], type=int, help='Selected recall to val')
     parser.add_argument('--save_root', default='result', type=str, help='Result saved root path')
     return parser
 
@@ -38,7 +42,7 @@ def parse_common_args():
 def get_transform(split='train'):
     if split == 'train':
         return transforms.Compose([
-            transforms.RandomResizedCrop(256, (1.0, 1.12)),
+            transforms.RandomResizedCrop(224, (1.0, 1.14)),
             transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
             transforms.RandomGrayscale(p=0.2),
             transforms.RandomHorizontalFlip(p=0.5),
@@ -46,20 +50,17 @@ def get_transform(split='train'):
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     else:
         return transforms.Compose([
-            transforms.Resize(256),
+            transforms.Resize(224),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
 
 class DomainDataset(Dataset):
-    def __init__(self, data_root, data_name, split='train'):
+    def __init__(self, data_root, data_name, domains, split='train'):
         super(DomainDataset, self).__init__()
 
         self.data_name = data_name
-        if data_name == 'cityscapes':
-            self.domains = ['clear', 'fog']
-        else:
-            self.domains = ['image', 'sketch']
+        self.domains = domains
         self.images, self.categories, self.labels = [], [], []
         for i, domain in enumerate(self.domains):
             images = sorted(glob.glob(os.path.join(data_root, data_name, split, domain, '*.png')))
