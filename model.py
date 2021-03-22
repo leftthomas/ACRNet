@@ -28,12 +28,12 @@ class Generator(nn.Module):
 
         # initial convolution block
         model = [nn.ReflectionPad2d(3),
-                 nn.Conv2d(input_nc, 32, 7),
-                 nn.InstanceNorm2d(32),
+                 nn.Conv2d(input_nc, 64, 7),
+                 nn.InstanceNorm2d(64),
                  nn.ReLU(inplace=True)]
 
         # down sampling
-        in_features = 32
+        in_features = 64
         out_features = in_features * 2
         for _ in range(2):
             model += [nn.Conv2d(in_features, out_features, 3, stride=2, padding=1),
@@ -57,7 +57,7 @@ class Generator(nn.Module):
 
         # output layer
         model += [nn.ReflectionPad2d(3),
-                  nn.Conv2d(32, output_nc, 7),
+                  nn.Conv2d(64, output_nc, 7),
                   nn.Tanh()]
 
         self.model = nn.Sequential(*model)
@@ -71,23 +71,23 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         # a bunch of convolutions one after another
-        model = [nn.Conv2d(input_nc, 32, 4, stride=2, padding=1),
+        model = [nn.Conv2d(input_nc, 64, 4, stride=2, padding=1),
                  nn.LeakyReLU(0.2, inplace=True)]
-
-        model += [nn.Conv2d(32, 64, 4, stride=2, padding=1),
-                  nn.InstanceNorm2d(64),
-                  nn.LeakyReLU(0.2, inplace=True)]
 
         model += [nn.Conv2d(64, 128, 4, stride=2, padding=1),
                   nn.InstanceNorm2d(128),
                   nn.LeakyReLU(0.2, inplace=True)]
 
-        model += [nn.Conv2d(128, 256, 4, padding=1),
+        model += [nn.Conv2d(128, 256, 4, stride=2, padding=1),
                   nn.InstanceNorm2d(256),
                   nn.LeakyReLU(0.2, inplace=True)]
 
+        model += [nn.Conv2d(256, 512, 4, padding=1),
+                  nn.InstanceNorm2d(512),
+                  nn.LeakyReLU(0.2, inplace=True)]
+
         # FCN classification layer
-        model += [nn.Conv2d(256, 1, 4, padding=1)]
+        model += [nn.Conv2d(512, 1, 4, padding=1)]
 
         self.model = nn.Sequential(*model)
 
