@@ -133,7 +133,7 @@ class DomainDataset(Dataset):
 
 
 def recall(vectors, ranks, domains, categories, labels):
-    categories = torch.as_tensor(categories, device=vectors.device)
+    categories = torch.as_tensor(categories, dtype=torch.bool, device=vectors.device)
     labels = torch.as_tensor(labels, device=vectors.device)
     acc = {}
     domain_a_vectors = vectors[~categories]

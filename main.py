@@ -23,7 +23,7 @@ parser.add_argument('--rounds', default=5, type=int, help='Number of round to tr
 # args parse
 args = parser.parse_args()
 data_root, data_name, method_name, train_domains = args.data_root, args.data_name, args.method_name, args.train_domains
-val_domains, proj_dim, temperature, batch_size = args.val_domains, args.proj_dim, args.temperature, args.batch_size
+val_domains, hidden_dim, temperature, batch_size = args.val_domains, args.hidden_dim, args.temperature, args.batch_size
 style_num, gan_iter, contrast_iter = args.style_num, args.gan_iter, args.total_iter
 ranks, save_root, rounds = args.ranks, args.save_root, args.rounds
 # asserts
@@ -38,7 +38,7 @@ val_contrast_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False,
 val_gan_loader = DataLoader(val_data, batch_size=1, shuffle=False, num_workers=8)
 
 # model setup
-backbone = Backbone(proj_dim).cuda()
+backbone = Backbone(hidden_dim).cuda()
 # optimizer config
 optimizer_backbone = Adam(backbone.parameters(), lr=1e-3, weight_decay=1e-6)
 

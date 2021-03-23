@@ -14,7 +14,7 @@ parser = parse_common_args()
 # args parse
 args = parser.parse_args()
 data_root, data_name, method_name, train_domains = args.data_root, args.data_name, args.method_name, args.train_domains
-val_domains, proj_dim, temperature, batch_size = args.val_domains, args.proj_dim, args.temperature, args.batch_size
+val_domains, hidden_dim, temperature, batch_size = args.val_domains, args.hidden_dim, args.temperature, args.batch_size
 total_iter, ranks, save_root = args.total_iter, args.ranks, args.save_root
 # asserts
 assert method_name != 'zsco', 'not support for {}'.format(method_name)
@@ -26,18 +26,18 @@ train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_w
 val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=8)
 
 # model setup
-model = Backbone(proj_dim, pretrained=method_name == 'pretrained').cuda()
+model = Backbone(hidden_dim, pretrained=method_name == 'pretrained').cuda()
 # optimizer config
 optimizer = Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
 if method_name == 'npid':
-    loss_criterion = NPIDLoss(len(train_data), proj_dim=proj_dim, temperature=temperature)
+    loss_criterion = NPIDLoss(len(train_data), proj_dim=2048, temperature=temperature)
 elif method_name == 'simclr':
     loss_criterion = SimCLRLoss(temperature)
 elif method_name == 'proxyanchor':
-    loss_criterion = ProxyAnchorLoss(len(train_data.classes), proj_dim).cuda()
+    loss_criterion = ProxyAnchorLoss(len(train_data.classes), 2048).cuda()
     loss_optimizer = Adam(loss_criterion.parameters(), lr=1e-3, weight_decay=1e-6)
 elif method_name == 'softtriple':
-    loss_criterion = SoftTripleLoss(len(train_data.classes), proj_dim).cuda()
+    loss_criterion = SoftTripleLoss(len(train_data.classes), 2048).cuda()
     loss_optimizer = Adam(loss_criterion.parameters(), lr=1e-3, weight_decay=1e-6)
 
 results = {'train_loss': [], 'val_precise': []}
