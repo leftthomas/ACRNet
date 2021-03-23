@@ -93,8 +93,7 @@ python main.py --method_name zsco --data_name pacs --style_num 16
 
 The models are trained on one NVIDIA GTX TITAN (12G) GPU. `Adam` is used to optimize the model, `lr` is `1e-3`
 and `weight decay` is `1e-6`. `batch size` is `32` for `zsco`, `simsiam` and `simclr`, `64` for `npid`, `proxyanchor`
-and
-`softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hyper-parameters are the default values.
+and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hyper-parameters are the default values.
 
 ### PACS
 
@@ -158,42 +157,42 @@ and
 <tbody>
   <tr>
     <td align="center">Pretrained</td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">56.2</td>
+    <td align="center">82.5</td>
+    <td align="center">89.4</td>
+    <td align="center">45.7</td>
+    <td align="center">77.5</td>
+    <td align="center">89.6</td>
+    <td align="center">52.7</td>
+    <td align="center">70.8</td>
+    <td align="center">77.7</td>
+    <td align="center">94.4</td>
+    <td align="center">98.6</td>
+    <td align="center">99.3</td>
+    <td align="center">23.8</td>
+    <td align="center">42.3</td>
+    <td align="center">51.5</td>
+    <td align="center">32.0</td>
+    <td align="center">72.4</td>
+    <td align="center">89.1</td>
+    <td align="center">27.0</td>
+    <td align="center">46.4</td>
+    <td align="center">59.0</td>
+    <td align="center">84.6</td>
+    <td align="center">93.8</td>
+    <td align="center">96.6</td>
+    <td align="center">32.0</td>
+    <td align="center">58.3</td>
+    <td align="center">67.2</td>
+    <td align="center">30.0</td>
+    <td align="center">66.0</td>
+    <td align="center">78.7</td>
+    <td align="center">28.4</td>
+    <td align="center">46.5</td>
+    <td align="center">59.5</td>
+    <td align="center">21.9</td>
+    <td align="center">37.0</td>
+    <td align="center">54.0</td>
     <td align="center"><a href="https://pan.baidu.com/s/1G9qdUvrFHqEm1kbmPmel9w">ea3u</a></td>
   </tr>
   <tr>
@@ -501,42 +500,42 @@ and
 <tbody>
   <tr>
     <td align="center">Pretrained</td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">46.7</td>
+    <td align="center">68.4</td>
+    <td align="center">77.7</td>
+    <td align="center">30.5</td>
+    <td align="center">51.2</td>
+    <td align="center">61.3</td>
+    <td align="center">48.6</td>
+    <td align="center">67.7</td>
+    <td align="center">75.8</td>
+    <td align="center">54.0</td>
+    <td align="center">75.3</td>
+    <td align="center">83.4</td>
+    <td align="center">57.3</td>
+    <td align="center">76.8</td>
+    <td align="center">83.1</td>
+    <td align="center">62.4</td>
+    <td align="center">81.4</td>
+    <td align="center">88.7</td>
+    <td align="center">37.1</td>
+    <td align="center">53.6</td>
+    <td align="center">61.3</td>
+    <td align="center">53.9</td>
+    <td align="center">74.8</td>
+    <td align="center">82.2</td>
+    <td align="center">38.9</td>
+    <td align="center">57.6</td>
+    <td align="center">64.9</td>
+    <td align="center">55.7</td>
+    <td align="center">76.9</td>
+    <td align="center">84.0</td>
+    <td align="center">71.2</td>
+    <td align="center">87.1</td>
+    <td align="center">91.8</td>
+    <td align="center">67.4</td>
+    <td align="center">83.5</td>
+    <td align="center">88.3</td>
     <td align="center"><a href="https://pan.baidu.com/s/1G9qdUvrFHqEm1kbmPmel9w">ea3u</a></td>
   </tr>
   <tr>
