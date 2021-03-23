@@ -28,9 +28,9 @@ def parse_common_args():
     parser.add_argument('--method_name', default='zsco', type=str,
                         choices=['zsco', 'simsiam', 'simclr', 'npid', 'proxyanchor', 'softtriple', 'pretrained'],
                         help='Compared method name')
-    parser.add_argument('--train_domains', nargs='+', default=['cartoon', 'photo'], type=str,
+    parser.add_argument('--train_domains', nargs='+', default=['art', 'cartoon'], type=str,
                         help='Selected domains to train')
-    parser.add_argument('--val_domains', nargs='+', default=['sketch', 'art'], type=str,
+    parser.add_argument('--val_domains', nargs='+', default=['photo', 'sketch'], type=str,
                         help='Selected domains to val')
     parser.add_argument('--hidden_dim', default=512, type=int, help='Hidden feature dim for prediction head')
     parser.add_argument('--temperature', default=0.1, type=float, help='Temperature used in softmax')
