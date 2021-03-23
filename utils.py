@@ -26,13 +26,13 @@ def parse_common_args():
     parser.add_argument('--data_root', default='data', type=str, help='Datasets root path')
     parser.add_argument('--data_name', default='pacs', type=str, choices=['pacs', 'office'], help='Dataset name')
     parser.add_argument('--method_name', default='zsco', type=str,
-                        choices=['zsco', 'simclr', 'npid', 'proxyanchor', 'softtriple', 'pretrained'],
+                        choices=['zsco', 'simsiam', 'simclr', 'npid', 'proxyanchor', 'softtriple', 'pretrained'],
                         help='Compared method name')
     parser.add_argument('--train_domains', nargs='+', default=['cartoon', 'photo'], type=str,
                         help='Selected domains to train')
     parser.add_argument('--val_domains', nargs='+', default=['sketch', 'art'], type=str,
                         help='Selected domains to val')
-    parser.add_argument('--proj_dim', default=128, type=int, help='Projected feature dim for computing loss')
+    parser.add_argument('--hidden_dim', default=512, type=int, help='Hidden feature dim for prediction head')
     parser.add_argument('--temperature', default=0.1, type=float, help='Temperature used in softmax')
     parser.add_argument('--batch_size', default=32, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--total_iter', default=10000, type=int, help='Number of bp to train')
@@ -132,33 +132,29 @@ class DomainDataset(Dataset):
         return images, names, categories, labels
 
 
-def recall(vectors, ranks, domains, labels):
+def recall(vectors, ranks, domains, categories, labels):
+    categories = torch.as_tensor(categories, device=vectors.device)
     labels = torch.as_tensor(labels, device=vectors.device)
     acc = {}
-    domain_a_vectors = vectors[: len(vectors) // 2]
-    domain_b_vectors = vectors[len(vectors) // 2:]
-    domain_a_labels = labels[: len(labels) // 2]
-    domain_b_labels = labels[len(labels) // 2:]
+    domain_a_vectors = vectors[~categories]
+    domain_b_vectors = vectors[categories]
+    domain_a_labels = labels[~categories]
+    domain_b_labels = labels[categories]
     # A -> B
     sim_ab = domain_a_vectors.mm(domain_b_vectors.t())
     idx_ab = sim_ab.topk(k=ranks[-1], dim=-1, largest=True)[1]
     # B -> A
     sim_ba = domain_b_vectors.mm(domain_a_vectors.t())
     idx_ba = sim_ba.topk(k=ranks[-1], dim=-1, largest=True)[1]
-    # cross A and B
-    sim = vectors.mm(vectors.t())
-    sim.fill_diagonal_(-np.inf)
-    idx = sim.topk(k=ranks[-1], dim=-1, largest=True)[1]
 
     for r in ranks:
         correct_ab = (torch.eq(domain_b_labels[idx_ab[:, 0:r]], domain_a_labels.unsqueeze(dim=-1))).any(dim=-1)
         acc['{}->{}@{}'.format(domains[0], domains[1], r)] = (torch.sum(correct_ab) / correct_ab.size(0)).item()
         correct_ba = (torch.eq(domain_a_labels[idx_ba[:, 0:r]], domain_b_labels.unsqueeze(dim=-1))).any(dim=-1)
         acc['{}->{}@{}'.format(domains[1], domains[0], r)] = (torch.sum(correct_ba) / correct_ba.size(0)).item()
-        correct = (torch.eq(labels[idx[:, 0:r]], labels.unsqueeze(dim=-1))).any(dim=-1)
-        acc['{}<->{}@{}'.format(domains[0], domains[1], r)] = (torch.sum(correct) / correct.size(0)).item()
     # the cross recall is chosen as the representative of precise
-    acc['val_precise'] = acc['{}<->{}@{}'.format(domains[0], domains[1], ranks[0])]
+    acc['val_precise'] = (acc['{}->{}@{}'.format(domains[0], domains[1], ranks[0])] + acc[
+        '{}->{}@{}'.format(domains[1], domains[0], ranks[0])]) / 2
     return acc
 
 
@@ -170,7 +166,8 @@ def val_contrast(net, data_loader, results, ranks, current_iter, total_iter):
         for data, _, _, _, _, _ in tqdm(data_loader, desc='Feature extracting', dynamic_ncols=True):
             vectors.append(net(data.cuda())[0])
         vectors = torch.cat(vectors, dim=0)
-        acc = recall(vectors, ranks, data_loader.dataset.domains, data_loader.dataset.labels)
+        acc = recall(vectors, ranks, data_loader.dataset.domains, data_loader.dataset.categories,
+                     data_loader.dataset.labels)
         precise = acc['val_precise'] * 100
         print('Val Iter: [{}/{}] Precise: {:.2f}%'.format(current_iter, total_iter, precise))
         for key, value in acc.items():

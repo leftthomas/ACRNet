@@ -61,10 +61,10 @@ optional arguments:
 # common args
 --data_root                   Datasets root path [default value is 'data']
 --data_name                   Dataset name [default value is 'pacs'](choices=['pacs', 'office'])
---method_name                 Compared method name [default value is 'zsco'](choices=['zsco', 'simclr', 'npid', 'proxyanchor', 'softtriple', 'pretrained'])
+--method_name                 Compared method name [default value is 'zsco'](choices=['zsco', 'simsiam', 'simclr', 'npid', 'proxyanchor', 'softtriple', 'pretrained'])
 --train_domains               Selected domains to train [default value is ['cartoon', 'photo']]
 --val_domains                 Selected domains to val [default value is ['sketch', 'art']]
---proj_dim                    Projected feature dim for computing loss [default value is 128]
+--hidden_dim                  Hidden feature dim for prediction head [default value is 512]
 --temperature                 Temperature used in softmax [default value is 0.1]
 --batch_size                  Number of images in each mini-batch [default value is 32]
 --total_iter                  Number of bp to train [default value is 10000]
@@ -92,7 +92,8 @@ python main.py --method_name zsco --data_name pacs --style_num 16
 ## Benchmarks
 
 The models are trained on one NVIDIA GTX TITAN (12G) GPU. `Adam` is used to optimize the model, `lr` is `1e-3`
-and `weight decay` is `1e-6`. `batch size` is `32` for `zsco` and `simclr`, `64` for `npid`, `proxyanchor` and
+and `weight decay` is `1e-6`. `batch size` is `32` for `zsco`, `simsiam` and `simclr`, `64` for `npid`, `proxyanchor`
+and
 `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hyper-parameters are the default values.
 
 ### PACS
@@ -101,15 +102,39 @@ and `weight decay` is `1e-6`. `batch size` is `32` for `zsco` and `simclr`, `64`
 <thead>
   <tr>
     <th rowspan="2">Method</th>
-    <th colspan="3">Art &lt;--&gt; Cartoon</th>
-    <th colspan="3">Art &lt;--&gt; Photo</th>
-    <th colspan="3">Art &lt;--&gt; Sketch</th>
-    <th colspan="3">Cartoon &lt;--&gt; Photo</th>
-    <th colspan="3">Cartoon &lt;--&gt; Sketch</th>
-    <th colspan="3">Photo &lt;--&gt; Sketch</th>
+    <th colspan="3">Art --&gt; Cartoon</th>
+    <th colspan="3">Cartoon --&gt; Art</th>
+    <th colspan="3">Art --&gt; Photo</th>
+    <th colspan="3">Photo --&gt; Art</th>
+    <th colspan="3">Art --&gt; Sketch</th>
+    <th colspan="3">Sketch --&gt; Art</th>
+    <th colspan="3">Cartoon --&gt; Photo</th>
+    <th colspan="3">Photo --&gt; Cartoon</th>
+    <th colspan="3">Cartoon --&gt; Sketch</th>
+    <th colspan="3">Sketch --&gt; Cartoon</th>
+    <th colspan="3">Photo --&gt; Sketch</th>
+    <th colspan="3">Sketch --&gt; Photo</th>    
     <th rowspan="2">Download</th>
   </tr>
   <tr>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
     <td align="center">R@1</td>
     <td align="center">R@5</td>
     <td align="center">R@10</td>
@@ -151,10 +176,46 @@ and `weight decay` is `1e-6`. `batch size` is `32` for `zsco` and `simclr`, `64`
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"><a href="https://pan.baidu.com/s/1G9qdUvrFHqEm1kbmPmel9w">ea3u</a></td>
   </tr>
   <tr>
     <td align="center">NPID</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
@@ -195,10 +256,86 @@ and `weight decay` is `1e-6`. `batch size` is `32` for `zsco` and `simclr`, `64`
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"><a href="https://pan.baidu.com/s/1aJGLPODKE4cCHLZYDg96jA">4jvm</a></td>
+  </tr>
+  <tr>
+    <td align="center">SimSiam</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"><a href="https://pan.baidu.com/s/1aJGLPODKE4cCHLZYDg96jA">4jvm</a></td>
   </tr>
   <tr>
     <td align="center">SoftTriple</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
@@ -239,10 +376,46 @@ and `weight decay` is `1e-6`. `batch size` is `32` for `zsco` and `simclr`, `64`
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"><a href="https://pan.baidu.com/s/1aEQhoDH3ciAHESbzSfeR6Q">99k3</a></td>
   </tr>
   <tr>
     <td align="center">ZsCo</td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
     <td align="center"><b></b></td>
     <td align="center"><b></b></td>
     <td align="center"><b></b></td>
@@ -272,15 +445,39 @@ and `weight decay` is `1e-6`. `batch size` is `32` for `zsco` and `simclr`, `64`
 <thead>
   <tr>
     <th rowspan="2">Method</th>
-    <th colspan="3">Art &lt;--&gt; Clipart</th>
-    <th colspan="3">Art &lt;--&gt; Product</th>
-    <th colspan="3">Art &lt;--&gt; Real</th>
-    <th colspan="3">Clipart &lt;--&gt; Product</th>
-    <th colspan="3">Clipart &lt;--&gt; Real</th>
-    <th colspan="3">Product &lt;--&gt; Real</th>
+    <th colspan="3">Art --&gt; Clipart</th>
+    <th colspan="3">Clipart --&gt; Art</th>
+    <th colspan="3">Art --&gt; Product</th>
+    <th colspan="3">Product --&gt; Art</th>
+    <th colspan="3">Art --&gt; Real</th>
+    <th colspan="3">Real --&gt; Art</th>
+    <th colspan="3">Clipart --&gt; Product</th>
+    <th colspan="3">Product --&gt; Clipart</th>
+    <th colspan="3">Clipart --&gt; Real</th>
+    <th colspan="3">Real --&gt; Clipart</th>
+    <th colspan="3">Product --&gt; Real</th>
+    <th colspan="3">Real --&gt; Product</th>    
     <th rowspan="2">Download</th>
   </tr>
   <tr>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
+    <td align="center">R@1</td>
+    <td align="center">R@5</td>
+    <td align="center">R@10</td>
     <td align="center">R@1</td>
     <td align="center">R@5</td>
     <td align="center">R@10</td>
@@ -322,10 +519,46 @@ and `weight decay` is `1e-6`. `batch size` is `32` for `zsco` and `simclr`, `64`
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"><a href="https://pan.baidu.com/s/1G9qdUvrFHqEm1kbmPmel9w">ea3u</a></td>
   </tr>
   <tr>
     <td align="center">NPID</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
@@ -366,10 +599,86 @@ and `weight decay` is `1e-6`. `batch size` is `32` for `zsco` and `simclr`, `64`
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"><a href="https://pan.baidu.com/s/1aJGLPODKE4cCHLZYDg96jA">4jvm</a></td>
+  </tr>
+  <tr>
+    <td align="center">SimSiam</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"><a href="https://pan.baidu.com/s/1aJGLPODKE4cCHLZYDg96jA">4jvm</a></td>
   </tr>
   <tr>
     <td align="center">SoftTriple</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
@@ -410,10 +719,46 @@ and `weight decay` is `1e-6`. `batch size` is `32` for `zsco` and `simclr`, `64`
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
     <td align="center"><a href="https://pan.baidu.com/s/1aEQhoDH3ciAHESbzSfeR6Q">99k3</a></td>
   </tr>
   <tr>
     <td align="center">ZsCo</td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
+    <td align="center"><b></b></td>
     <td align="center"><b></b></td>
     <td align="center"><b></b></td>
     <td align="center"><b></b></td>
