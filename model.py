@@ -96,9 +96,10 @@ class Discriminator(nn.Module):
 
 
 class Backbone(nn.Module):
-    def __init__(self, proj_dim, pretrained=False):
+    def __init__(self, hidden_dim, pretrained=False):
         super(Backbone, self).__init__()
 
+        self.pretrained = pretrained
         self.f = []
         for name, module in resnet50(pretrained).named_children():
             if not isinstance(module, nn.Linear):
@@ -106,13 +107,19 @@ class Backbone(nn.Module):
         # encoder
         self.f = nn.Sequential(*self.f)
         # projection head
-        self.g = nn.Sequential(nn.Linear(2048, 512, bias=False), nn.BatchNorm1d(512),
-                               nn.ReLU(inplace=True), nn.Linear(512, proj_dim, bias=True))
+        self.g = nn.Sequential(nn.Linear(2048, 2048, bias=False), nn.BatchNorm1d(2048), nn.ReLU(inplace=True),
+                               nn.Linear(2048, 2048, bias=False), nn.BatchNorm1d(2048), nn.ReLU(inplace=True),
+                               nn.Linear(2048, 2048, bias=False), nn.BatchNorm1d(2048))
+        # prediction head
+        self.h = nn.Sequential(nn.Linear(2048, hidden_dim, bias=False), nn.BatchNorm1d(hidden_dim),
+                               nn.ReLU(inplace=True), nn.Linear(hidden_dim, 2048, bias=True))
 
     def forward(self, x):
         x = self.f(x)
         feature = torch.flatten(x, start_dim=1)
-        proj = self.g(feature)
+        if not self.pretrained:
+            feature = self.g(feature)
+        proj = self.h(feature)
         return F.normalize(feature, dim=-1), F.normalize(proj, dim=-1)
 
 
