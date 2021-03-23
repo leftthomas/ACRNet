@@ -102,57 +102,52 @@ for r in range(1, rounds + 1):
         DG.train()
         train_bar = tqdm(train_gan_loader, dynamic_ncols=True)
         for content, _, _, _, _, _ in train_bar:
-            content = content.cuda()
+            content = content.squeeze(dim=0).cuda()
             styles = [(get_transform('train')(style)).unsqueeze(dim=0).cuda() for style in style_images]
-            for style, style_buffer, content_buffer, F, G, DF, DG, optimizer_FG, optimizer_DF, optimizer_DG, \
-                lr_scheduler_FG, lr_scheduler_DF, lr_scheduler_DG in zip(styles, fake_style_buffer, fake_content_buffer,
-                                                                         Fs, Gs, DFs, DGs, optimizer_FGs, optimizer_DFs,
-                                                                         optimizer_DGs, lr_scheduler_FGs,
-                                                                         lr_scheduler_DFs, lr_scheduler_DGs):
-                # F and G
-                optimizer_FG.zero_grad()
-                fake_style = F(content)
-                fake_content = G(style)
-                pred_fake_style = DG(fake_style)
-                pred_fake_content = DF(fake_content)
-                # adversarial loss
-                target_fake_style = torch.ones(pred_fake_style.size(), device=pred_fake_style.device)
-                target_fake_content = torch.ones(pred_fake_content.size(), device=pred_fake_content.device)
-                adversarial_loss = criterion_adversarial(pred_fake_style, target_fake_style) + criterion_adversarial(
-                    pred_fake_content, target_fake_content)
-                # cycle loss
-                cycle_loss = criterion_cycle(G(fake_style), content) + criterion_cycle(F(fake_content), style)
-                fg_loss = adversarial_loss + 10 * cycle_loss
-                fg_loss.backward()
-                optimizer_FG.step()
-                lr_scheduler_FG.step()
-                total_fg_loss += fg_loss.item() / style_num
-                # DF
-                optimizer_DF.zero_grad()
-                pred_real_content = DF(content)
-                target_real_content = torch.ones(pred_real_content.size(), device=pred_real_content.device)
-                fake_content = content_buffer.push_and_pop(fake_content)
-                pred_fake_content = DF(fake_content)
-                target_fake_content = torch.zeros(pred_fake_content.size(), device=pred_fake_content.device)
-                adversarial_loss = (criterion_adversarial(pred_real_content, target_real_content)
-                                    + criterion_adversarial(pred_fake_content, target_fake_content)) / 2
-                adversarial_loss.backward()
-                optimizer_DF.step()
-                lr_scheduler_DF.step()
-                total_df_loss += adversarial_loss.item() / style_num
-                # DG
-                optimizer_DG.zero_grad()
-                pred_real_style = DG(style)
-                target_real_style = torch.ones(pred_real_style.size(), device=pred_real_style.device)
-                fake_style = style_buffer.push_and_pop(fake_style)
-                pred_fake_style = DG(fake_style)
-                target_fake_style = torch.zeros(pred_fake_style.size(), device=pred_fake_style.device)
-                adversarial_loss = (criterion_adversarial(pred_real_style, target_real_style)
-                                    + criterion_adversarial(pred_fake_style, target_fake_style)) / 2
-                adversarial_loss.backward()
-                optimizer_DG.step()
-                lr_scheduler_DG.step()
-                total_dg_loss += adversarial_loss.item() / style_num
+            # F and G
+            optimizer_FG.zero_grad()
+            fake_style = F(content)
+            fake_content = G(style)
+            pred_fake_style = DG(fake_style)
+            pred_fake_content = DF(fake_content)
+            # adversarial loss
+            target_fake_style = torch.ones(pred_fake_style.size(), device=pred_fake_style.device)
+            target_fake_content = torch.ones(pred_fake_content.size(), device=pred_fake_content.device)
+            adversarial_loss = criterion_adversarial(pred_fake_style, target_fake_style) + criterion_adversarial(
+                pred_fake_content, target_fake_content)
+            # cycle loss
+            cycle_loss = criterion_cycle(G(fake_style), content) + criterion_cycle(F(fake_content), style)
+            fg_loss = adversarial_loss + 10 * cycle_loss
+            fg_loss.backward()
+            optimizer_FG.step()
+            lr_scheduler_FG.step()
+            total_fg_loss += fg_loss.item() / style_num
+            # DF
+            optimizer_DF.zero_grad()
+            pred_real_content = DF(content)
+            target_real_content = torch.ones(pred_real_content.size(), device=pred_real_content.device)
+            fake_content = content_buffer.push_and_pop(fake_content)
+            pred_fake_content = DF(fake_content)
+            target_fake_content = torch.zeros(pred_fake_content.size(), device=pred_fake_content.device)
+            adversarial_loss = (criterion_adversarial(pred_real_content, target_real_content)
+                                + criterion_adversarial(pred_fake_content, target_fake_content)) / 2
+            adversarial_loss.backward()
+            optimizer_DF.step()
+            lr_scheduler_DF.step()
+            total_df_loss += adversarial_loss.item() / style_num
+            # DG
+            optimizer_DG.zero_grad()
+            pred_real_style = DG(style)
+            target_real_style = torch.ones(pred_real_style.size(), device=pred_real_style.device)
+            fake_style = style_buffer.push_and_pop(fake_style)
+            pred_fake_style = DG(fake_style)
+            target_fake_style = torch.zeros(pred_fake_style.size(), device=pred_fake_style.device)
+            adversarial_loss = (criterion_adversarial(pred_real_style, target_real_style)
+                                + criterion_adversarial(pred_fake_style, target_fake_style)) / 2
+            adversarial_loss.backward()
+            optimizer_DG.step()
+            lr_scheduler_DG.step()
+            total_dg_loss += adversarial_loss.item() / style_num
 
             current_gan_iter += 1
             train_bar.set_description('[{}/{}] Train Iter: [{}/{}] FG Loss: {:.4f}, DFs Loss: {:.4f}, DGs Loss: {:.4f}'
