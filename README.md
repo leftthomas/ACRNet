@@ -227,12 +227,12 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">15.6</td>
+    <td align="center">42.2</td>
+    <td align="center">52.8</td>
+    <td align="center">26.5</td>
+    <td align="center">40.5</td>
+    <td align="center">65.3</td>
     <td align="center"><a href="https://pan.baidu.com/s/1PWLOBKWb8gUUibXOX9OQyA">hu2k</a></td>
   </tr>
   <tr>
@@ -261,18 +261,18 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">20.1</td>
+    <td align="center">53.6</td>
+    <td align="center">68.8</td>
+    <td align="center">24.8</td>
+    <td align="center">62.6</td>
+    <td align="center">81.1</td>
+    <td align="center">24.9</td>
+    <td align="center">51.8</td>
+    <td align="center">65.9</td>
+    <td align="center">24.7</td>
+    <td align="center">49.3</td>
+    <td align="center">73.5</td>
     <td align="center"><a href="https://pan.baidu.com/s/1aJGLPODKE4cCHLZYDg96jA">4jvm</a></td>
   </tr>
   <tr>
@@ -301,18 +301,18 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">20.6</td>
+    <td align="center">40.0</td>
+    <td align="center">48.3</td>
+    <td align="center">20.0</td>
+    <td align="center">59.9</td>
+    <td align="center">76.0</td>
+    <td align="center">23.4</td>
+    <td align="center">55.7</td>
+    <td align="center">68.5</td>
+    <td align="center">22.7</td>
+    <td align="center">51.7</td>
+    <td align="center">68.7</td>
     <td align="center"><a href="https://pan.baidu.com/s/1aJGLPODKE4cCHLZYDg96jA">4jvm</a></td>
   </tr>
   <tr>
@@ -341,18 +341,18 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">36.4</td>
+    <td align="center">68.7</td>
+    <td align="center">80.9</td>
+    <td align="center">36.8</td>
+    <td align="center">72.8</td>
+    <td align="center">87.0</td>
+    <td align="center">42.3</td>
+    <td align="center">71.9</td>
+    <td align="center">83.0</td>
+    <td align="center">42.2</td>
+    <td align="center">76.6</td>
+    <td align="center">86.3</td>
     <td align="center"><a href="https://pan.baidu.com/s/1mYIRpX4ABX9YVLs0gFJVmg">6we5</a></td>
   </tr>
   <tr>
@@ -381,18 +381,18 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
     <td align="center"></td>
     <td align="center"></td>
     <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">31.4</td>
+    <td align="center">66.0</td>
+    <td align="center">80.1</td>
+    <td align="center">32.5</td>
+    <td align="center">71.5</td>
+    <td align="center">86.5</td>
+    <td align="center">45.0</td>
+    <td align="center">73.2</td>
+    <td align="center">82.3</td>
+    <td align="center">43.9</td>
+    <td align="center">74.2</td>
+    <td align="center">84.1</td>
     <td align="center"><a href="https://pan.baidu.com/s/1aEQhoDH3ciAHESbzSfeR6Q">99k3</a></td>
   </tr>
   <tr>
