@@ -7,7 +7,7 @@ from torch.optim import Adam
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
 
-from model import Backbone, SimCLRLoss, NPIDLoss
+from model import Backbone, SimCLRLoss, NPIDLoss, SimSiamLoss
 from utils import DomainDataset, val_contrast, parse_common_args
 
 parser = parse_common_args()
@@ -33,6 +33,8 @@ if method_name == 'npid':
     loss_criterion = NPIDLoss(len(train_data), proj_dim=2048, temperature=temperature)
 elif method_name == 'simclr':
     loss_criterion = SimCLRLoss(temperature)
+elif method_name == 'simsiam':
+    loss_criterion = SimSiamLoss()
 elif method_name == 'proxyanchor':
     loss_criterion = ProxyAnchorLoss(len(train_data.classes), 2048).cuda()
     loss_optimizer = Adam(loss_criterion.parameters(), lr=1e-3, weight_decay=1e-6)
@@ -63,13 +65,16 @@ else:
         train_bar = tqdm(train_loader, dynamic_ncols=True)
         for img_1, img_2, _, _, img_label, pos_index in train_bar:
             img_1, img_2 = img_1.cuda(), img_2.cuda()
-            _, proj_1 = model(img_1)
+            feature_1, proj_1 = model(img_1)
 
             if method_name == 'npid':
                 loss, pos_samples = loss_criterion(proj_1, pos_index)
             elif method_name == 'simclr':
-                _, proj_2 = model(img_2)
+                feature_2, proj_2 = model(img_2)
                 loss = loss_criterion(proj_1, proj_2)
+            elif method_name == 'simsiam':
+                feature_2, proj_2 = model(img_2)
+                loss = loss_criterion(feature_1, feature_2, proj_1, proj_2)
             elif method_name == 'proxyanchor':
                 loss = loss_criterion(proj_1, img_label)
             else:

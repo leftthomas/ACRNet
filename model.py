@@ -192,3 +192,14 @@ class NPIDLoss(nn.Module):
         pos_samples = proj.detach().cpu() * self.momentum + pos_samples * (1.0 - self.momentum)
         pos_samples = F.normalize(pos_samples, dim=-1)
         self.bank.index_copy_(0, pos_index, pos_samples)
+
+
+class SimSiamLoss(nn.Module):
+    def __init__(self):
+        super(SimSiamLoss, self).__init__()
+
+    def forward(self, feature_1, feature_2, proj_1, proj_2):
+        sim_1 = -(proj_1 * feature_2.detach()).sum(dim=-1).mean()
+        sim_2 = -(proj_2 * feature_1.detach()).sum(dim=-1).mean()
+        loss = 0.5 * sim_1 + 0.5 * sim_2
+        return loss
