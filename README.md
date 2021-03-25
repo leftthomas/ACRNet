@@ -197,12 +197,12 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
   </tr>
   <tr>
     <td align="center">NPID</td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">20.5</td>
+    <td align="center">55.5</td>
+    <td align="center">71.7</td>
+    <td align="center">20.4</td>
+    <td align="center">60.2</td>
+    <td align="center">79.5</td>
     <td align="center">18.1</td>
     <td align="center">54.2</td>
     <td align="center">77.3</td>
@@ -237,12 +237,12 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
   </tr>
   <tr>
     <td align="center">SimCLR</td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">18.9</td>
+    <td align="center">50.1</td>
+    <td align="center">68.5</td>
+    <td align="center">18.0</td>
+    <td align="center">59.0</td>
+    <td align="center">77.6</td>
     <td align="center">18.6</td>
     <td align="center">49.9</td>
     <td align="center">67.2</td>
@@ -277,12 +277,12 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
   </tr>
   <tr>
     <td align="center">SimSiam</td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">20.7</td>
+    <td align="center">56.3</td>
+    <td align="center">72.9</td>
+    <td align="center">21.2</td>
+    <td align="center">59.8</td>
+    <td align="center">77.8</td>
     <td align="center">19.0</td>
     <td align="center">52.2</td>
     <td align="center">70.5</td>
@@ -317,12 +317,12 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
   </tr>
   <tr>
     <td align="center">SoftTriple</td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">27.6</td>
+    <td align="center">65.3</td>
+    <td align="center">80.5</td>
+    <td align="center">34.6</td>
+    <td align="center">71.5</td>
+    <td align="center">85.1</td>
     <td align="center">25.8</td>
     <td align="center">59.1</td>
     <td align="center">74.7</td>
@@ -357,12 +357,12 @@ and `softtriple`. `lr` is `2e-4` and `betas` is `(0.5, 0.999)` for GAN, other hy
   </tr>
   <tr>
     <td align="center">ProxyAnchor</td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
-    <td align="center"></td>
+    <td align="center">25.4</td>
+    <td align="center">58.9</td>
+    <td align="center">74.6</td>
+    <td align="center">31.1</td>
+    <td align="center">67.5</td>
+    <td align="center">83.7</td>
     <td align="center">22.9</td>
     <td align="center">58.4</td>
     <td align="center">75.7</td>
