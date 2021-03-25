@@ -41,6 +41,12 @@ def parse_common_args():
     return parser
 
 
+def obtain_style_code(style_num, size):
+    code = F.one_hot(torch.arange(style_num), num_classes=style_num)
+    style = code.view(*code.size(), 1, 1).expand(*code.size(), *size)
+    return style
+
+
 class AddStyleCode(torch.nn.Module):
     def __init__(self, style_num=0):
         super().__init__()
@@ -49,8 +55,7 @@ class AddStyleCode(torch.nn.Module):
     def forward(self, tensor):
         if self.style_num != 0:
             tensor = tensor.unsqueeze(dim=0).expand(self.style_num, *tensor.size())
-            styles = F.one_hot(torch.arange(self.style_num), num_classes=self.style_num)
-            styles = styles.view(*styles.size(), 1, 1).expand(*styles.size(), *tensor.size()[-2:])
+            styles = obtain_style_code(self.style_num, tensor.size()[-2:])
             tensor = torch.cat((tensor, styles), dim=1)
         return tensor
 

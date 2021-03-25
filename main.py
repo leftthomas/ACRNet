@@ -13,7 +13,8 @@ from torchvision.utils import save_image
 from tqdm import tqdm
 
 from model import Backbone, Generator, Discriminator, SimCLRLoss
-from utils import DomainDataset, weights_init_normal, ReplayBuffer, parse_common_args, get_transform, val_contrast
+from utils import DomainDataset, weights_init_normal, ReplayBuffer, parse_common_args, get_transform, val_contrast, \
+    obtain_style_code
 
 parser = parse_common_args()
 parser.add_argument('--style_num', default=8, type=int, help='Number of used styles')
@@ -33,9 +34,10 @@ assert method_name == 'zsco', 'not support for {}'.format(method_name)
 train_contrast_data = DomainDataset(data_root, data_name, train_domains, train=True)
 train_contrast_loader = DataLoader(train_contrast_data, batch_size=batch_size, shuffle=True, num_workers=8,
                                    drop_last=True)
-val_data = DomainDataset(data_root, data_name, val_domains, train=False)
-val_contrast_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=8)
-val_gan_loader = DataLoader(val_data, batch_size=1, shuffle=False, num_workers=8)
+val_contrast_data = DomainDataset(data_root, data_name, val_domains, train=False)
+val_contrast_loader = DataLoader(val_contrast_data, batch_size=batch_size, shuffle=False, num_workers=8)
+val_gan_data = DomainDataset(data_root, data_name, val_domains, train=False, style_num=style_num)
+val_gan_loader = DataLoader(val_gan_data, batch_size=1, shuffle=False, num_workers=8)
 
 # model setup
 backbone = Backbone(hidden_dim).cuda()
@@ -58,6 +60,7 @@ for r in range(1, rounds + 1):
     # each round should refresh style images
     train_gan_data = DomainDataset(data_root, data_name, train_domains, train=True, style_num=style_num)
     style_images, style_names, style_categories, style_labels = train_gan_data.refresh(style_num)
+    style_codes = obtain_style_code(style_num, size=[224, 224])
     train_gan_loader = DataLoader(train_gan_data, batch_size=1, shuffle=True, num_workers=8)
     # use conditional F, G, DF and DG
     F = Generator(3 + style_num, 3).cuda()
@@ -103,60 +106,64 @@ for r in range(1, rounds + 1):
         train_bar = tqdm(train_gan_loader, dynamic_ncols=True)
         for content, _, _, _, _, _ in train_bar:
             content = content.squeeze(dim=0).cuda()
-            styles = [(get_transform('train')(style)).unsqueeze(dim=0).cuda() for style in style_images]
+            styles = torch.cat((torch.stack([(get_transform(train=True)(style)).cuda() for style in style_images],
+                                            dim=0), style_codes.cuda()), dim=1)
             # F and G
             optimizer_FG.zero_grad()
             fake_style = F(content)
-            fake_content = G(style)
-            pred_fake_style = DG(fake_style)
-            pred_fake_content = DF(fake_content)
+            fake_content = G(styles)
+            pred_fake_style = DG(torch.cat((fake_style, style_codes.cuda()), dim=1))
+            pred_fake_content = DF(torch.cat((fake_content, style_codes.cuda()), dim=1))
             # adversarial loss
             target_fake_style = torch.ones(pred_fake_style.size(), device=pred_fake_style.device)
             target_fake_content = torch.ones(pred_fake_content.size(), device=pred_fake_content.device)
             adversarial_loss = criterion_adversarial(pred_fake_style, target_fake_style) + criterion_adversarial(
                 pred_fake_content, target_fake_content)
             # cycle loss
-            cycle_loss = criterion_cycle(G(fake_style), content) + criterion_cycle(F(fake_content), style)
+            cycle_loss = criterion_cycle(G(torch.cat((fake_style, style_codes.cuda()), dim=1)), content[:, :3, :, :]) \
+                         + criterion_cycle(F(torch.cat((fake_content, style_codes.cuda()), dim=1)), styles[:, :3, :, :])
             fg_loss = adversarial_loss + 10 * cycle_loss
             fg_loss.backward()
             optimizer_FG.step()
             lr_scheduler_FG.step()
-            total_fg_loss += fg_loss.item() / style_num
+            total_fg_loss += fg_loss.item()
             # DF
             optimizer_DF.zero_grad()
             pred_real_content = DF(content)
             target_real_content = torch.ones(pred_real_content.size(), device=pred_real_content.device)
-            fake_content = content_buffer.push_and_pop(fake_content)
-            pred_fake_content = DF(fake_content)
+            fake_content = torch.stack([content_buffer.push_and_pop(fake_c[:3, :, :]) for fake_c, content_buffer in
+                                        zip(fake_content, fake_content_buffer)], dim=0)
+            pred_fake_content = DF(torch.cat((fake_content, style_codes.cuda()), dim=1))
             target_fake_content = torch.zeros(pred_fake_content.size(), device=pred_fake_content.device)
             adversarial_loss = (criterion_adversarial(pred_real_content, target_real_content)
                                 + criterion_adversarial(pred_fake_content, target_fake_content)) / 2
             adversarial_loss.backward()
             optimizer_DF.step()
             lr_scheduler_DF.step()
-            total_df_loss += adversarial_loss.item() / style_num
+            total_df_loss += adversarial_loss.item()
             # DG
             optimizer_DG.zero_grad()
-            pred_real_style = DG(style)
+            pred_real_style = DG(styles)
             target_real_style = torch.ones(pred_real_style.size(), device=pred_real_style.device)
-            fake_style = style_buffer.push_and_pop(fake_style)
-            pred_fake_style = DG(fake_style)
+            fake_style = torch.stack([style_buffer.push_and_pop(fake_s[:3, :, :]) for fake_s, style_buffer in
+                                      zip(fake_style, fake_style_buffer)], dim=0)
+            pred_fake_style = DG(torch.cat((fake_style, style_codes.cuda()), dim=1))
             target_fake_style = torch.zeros(pred_fake_style.size(), device=pred_fake_style.device)
             adversarial_loss = (criterion_adversarial(pred_real_style, target_real_style)
                                 + criterion_adversarial(pred_fake_style, target_fake_style)) / 2
             adversarial_loss.backward()
             optimizer_DG.step()
             lr_scheduler_DG.step()
-            total_dg_loss += adversarial_loss.item() / style_num
+            total_dg_loss += adversarial_loss.item()
 
             current_gan_iter += 1
-            train_bar.set_description('[{}/{}] Train Iter: [{}/{}] FG Loss: {:.4f}, DFs Loss: {:.4f}, DGs Loss: {:.4f}'
+            train_bar.set_description('[{}/{}] Train Iter: [{}/{}] FG Loss: {:.4f}, DF Loss: {:.4f}, DG Loss: {:.4f}'
                                       .format(r, rounds, current_gan_iter, gan_iter, total_fg_loss / current_gan_iter,
                                               total_df_loss / current_gan_iter, total_dg_loss / current_gan_iter))
             if current_gan_iter % 100 == 0:
                 gan_results['train_fg_loss'].append(total_fg_loss / current_gan_iter)
-                gan_results['train_dfs_loss'].append(total_df_loss / current_gan_iter)
-                gan_results['train_dgs_loss'].append(total_dg_loss / current_gan_iter)
+                gan_results['train_df_loss'].append(total_df_loss / current_gan_iter)
+                gan_results['train_dg_loss'].append(total_dg_loss / current_gan_iter)
                 # save statistics
                 data_frame = pd.DataFrame(data=gan_results, index=range(1, current_gan_iter // 100 + 1))
                 save_path = '{}/{}/round-{}/results.csv'.format(save_root, save_name_pre, r)
@@ -166,66 +173,59 @@ for r in range(1, rounds + 1):
             # stop iter data when arriving the gan bp numbers
             if current_gan_iter == gan_iter:
                 # save the generated images for val data by current round model and styles
-                for F in Fs:
-                    F.eval()
+                F.eval()
                 with torch.no_grad():
-                    for image, name, category in zip(style_images, style_names, style_categories):
-                        domain = val_data.domains[category]
+                    for image, name, category, label in zip(style_images, style_names, style_categories, style_labels):
+                        domain = val_gan_data.domains[category]
                         name = os.path.basename(name)
-                        path = '{}/{}/round-{}/{}_{}'.format(save_root, save_name_pre, r, domain, name)
+                        label = val_gan_data.classes.inverse[label]
+                        path = '{}/{}/round-{}/{}_{}_{}'.format(save_root, save_name_pre, r, domain, label, name)
                         if not os.path.exists(os.path.dirname(path)):
                             os.makedirs(os.path.dirname(path))
                         image.save(path)
                     for img, _, img_name, category, label, _ in tqdm(val_gan_loader,
                                                                      desc='Generate images for specific styles',
                                                                      dynamic_ncols=True):
-                        for style_name, style_category, F in zip(style_names, style_categories, Fs):
-                            style_domain = val_data.domains[style_category]
+                        fake_style = (F(img.squeeze(dim=0).cuda()) + 1.0) / 2
+                        for fake_s, style_category, style_label, style_name in zip(fake_style, style_categories,
+                                                                                   style_labels, style_names):
+                            style_domain = val_gan_data.domains[style_category]
                             style_name = os.path.basename(style_name)
-                            domain = val_data.domains[category[0]]
+                            style_label = val_gan_data.classes.inverse[style_label]
+                            domain = val_gan_data.domains[category[0].item()]
                             name = os.path.basename(img_name[0])
-                            fake_style = (F(img.cuda()) + 1.0) / 2
-                            img_path = '{}/{}/round-{}/{}_{}/{}_{}'.format(save_root, save_name_pre, r, style_domain,
-                                                                           style_name.split('.')[0], domain, name)
+                            label_name = val_gan_data.classes.inverse[label[0].item()]
+                            img_path = '{}/{}/round-{}/{}_{}_{}/{}_{}_{}'.format(save_root, save_name_pre, r,
+                                                                                 style_domain, style_label,
+                                                                                 style_name.split('.')[0], domain,
+                                                                                 label_name, name)
                             if not os.path.exists(os.path.dirname(img_path)):
                                 os.makedirs(os.path.dirname(img_path))
-                            save_image(fake_style, img_path)
-                for style_name, style_category, F, G, DF, DG in zip(style_names, style_categories, Fs, Gs, DFs, DGs):
-                    F.train()
-                    style_domain = val_data.domains[style_category]
-                    style_name = os.path.basename(style_name)
-                    # save models
-                    torch.save(F.state_dict(),
-                               '{}/{}/round-{}/{}_{}_F.pth'.format(save_root, save_name_pre, r, style_domain,
-                                                                   style_name.split('.')[0]))
-                    torch.save(G.state_dict(),
-                               '{}/{}/round-{}/{}_{}_G.pth'.format(save_root, save_name_pre, r, style_domain,
-                                                                   style_name.split('.')[0]))
-                    torch.save(DF.state_dict(),
-                               '{}/{}/round-{}/{}_{}_DF.pth'.format(save_root, save_name_pre, r, style_domain,
-                                                                    style_name.split('.')[0]))
-                    torch.save(DG.state_dict(),
-                               '{}/{}/round-{}/{}_{}_DG.pth'.format(save_root, save_name_pre, r, style_domain,
-                                                                    style_name.split('.')[0]))
+                            save_image(fake_s, img_path)
+                F.train()
+                # save models
+                torch.save(F.state_dict(), '{}/{}/round-{}/F.pth'.format(save_root, save_name_pre, r))
+                torch.save(G.state_dict(), '{}/{}/round-{}/G.pth'.format(save_root, save_name_pre, r))
+                torch.save(DF.state_dict(), '{}/{}/round-{}/DF.pth'.format(save_root, save_name_pre, r))
+                torch.save(DG.state_dict(), '{}/{}/round-{}/DG.pth'.format(save_root, save_name_pre, r))
                 break
     # contrast training loop
-    for F in Fs:
-        F.eval()
+    F.eval()
     for epoch in range(1, contrast_epochs + 1):
         backbone.train()
         train_bar = tqdm(train_contrast_loader, dynamic_ncols=True)
-        for img_1, img_2, img_name, _, _, pos_index in train_bar:
-            img_1, img_2 = img_1.cuda(), img_2.cuda()
+        for img_1, _, img_name, _, _, _ in train_bar:
+            img_1 = img_1.cuda()
             _, proj_1 = backbone(img_1)
-            _, proj_2 = backbone(img_2)
             with torch.no_grad():
-                fs = random.choices(Fs, k=batch_size)
-                img_3 = []
+                # TODO
+                fs = random.choices(F, k=batch_size)
+                img_2 = []
                 for f, img in zip(fs, img_name):
-                    img_3.append(f((get_transform('train')(Image.open(img))).unsqueeze(dim=0).cuda()))
-                img_3 = torch.cat(img_3, dim=0)
-            _, proj_3 = backbone(img_3)
-            loss = criterion_contrast(proj_1, proj_2, proj_3)
+                    img_2.append(f((get_transform('train')(Image.open(img))).unsqueeze(dim=0).cuda()))
+                img_2 = torch.cat(img_2, dim=0)
+            _, proj_2 = backbone(img_2)
+            loss = criterion_contrast(proj_1, proj_2)
             optimizer_backbone.zero_grad()
             loss.backward()
             optimizer_backbone.step()
@@ -253,5 +253,4 @@ for r in range(1, rounds + 1):
             # stop iter data when arriving the contrast bp numbers
             if current_contrast_iter == contrast_iter:
                 break
-    for F in Fs:
-        F.train()
+    F.train()
