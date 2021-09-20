@@ -35,7 +35,7 @@ pip install bidict
 
 [PACS](https://domaingeneralization.github.io) and [Office-Home](https://www.hemanthdv.org/officeHomeDataset.html)
 datasets are used in this repo, you could download these datasets from official websites, or download them from
-[MEGA](https://mega.nz/folder/cspmEISJ#uetXIhSBHvQBqDMh0Z4Ejg). The data should be rearranged, please refer the paper to
+[Google Drive](https://drive.google.com/drive/folders/1On11Q38QT4j8Sa00eX1eufKyGCOJy_Oe?usp=sharing). The data should be rearranged, please refer the paper to
 acquire the details of `train/val` split. The data directory structure is shown as follows:
 
  ```
