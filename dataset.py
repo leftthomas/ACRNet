@@ -1,6 +1,4 @@
-import glob
 import json
-import os
 
 import numpy as np
 import torch
@@ -83,3 +81,43 @@ class VideoDataset(Dataset):
             return np.arange(length).astype(int)
         else:
             return np.floor(np.arange(self.num_segments) * length / self.num_segments).astype(int)
+
+
+if __name__ == '__main__':
+    import glob
+    from tqdm import tqdm
+    import cv2.cv2 as cv2
+
+    videos = glob.glob('../video_features/sample/*.mp4')
+    total_fps, min_frames, max_frames = set(), np.inf, -np.inf
+    bar = tqdm(videos, dynamic_ncols=True)
+    for video_name in bar:
+        video = cv2.VideoCapture(video_name)
+        fps = video.get(cv2.CAP_PROP_FPS)
+        frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
+        if frames < min_frames:
+            min_frames = frames
+        if frames > max_frames:
+            max_frames = frames
+        total_fps.add(fps)
+        bar.set_description('min-f: {} max-f: {} number fps: {}'.format(min_frames, max_frames, len(total_fps)))
+    print('min-f: {} max-f: {} fps: {}'.format(min_frames, max_frames, total_fps))
+
+if __name__ == '__main__':
+    import glob
+    import os
+    from tqdm import tqdm
+    import numpy as np
+
+    old_features = sorted(glob.glob('/data/thumos14/features/*/rgb/*'))
+    new_features = sorted(glob.glob('../video_features/thumos14/*/*_rgb.npy'))
+    news = {}
+    for feature in new_features:
+        news[os.path.basename(feature).split('.')[0][:-4]] = feature
+    for old in old_features:
+        old_feature = np.load(old)
+        new_feature = np.load(news[os.path.basename(old).split('.')[0]])
+        if old_feature.shape != new_feature.shape:
+            print('{}_{}'.format(old_feature.shape, new_feature.shape))
+        else:
+            assert (old_feature == new_feature).all()

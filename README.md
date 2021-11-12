@@ -23,19 +23,19 @@ mim install mmaction2
 
 ## Dataset
 
-[THUMOS 14](http://crcv.ucf.edu/THUMOS14/download.html) and
-[ActivityNet](http://activity-net.org/download.html) datasets are used in this repo, you could download these datasets
-from official websites. The I3D features of `THUMOS 14` dataset can be downloaded from
-[Google Drive](https://drive.google.com/file/d/1NqaDRo782bGZKo662I0rI_cvpDT67VQU/view), I3D features
-of `ActivityNet 1.2` dataset can be downloaded from
-[OneDrive](https://emailucr-my.sharepoint.com/personal/sujoy_paul_email_ucr_edu/_layouts/15/onedrive.aspx?originalPath=aHR0cHM6Ly9lbWFpbHVjci1teS5zaGFyZXBvaW50LmNvbS86ZjovZy9wZXJzb25hbC9zdWpveV9wYXVsX2VtYWlsX3Vjcl9lZHUvRXMxemJIUVk0UHhLaFVrZGd2V0h0VTBCSy1feXVnYVNqWEs4NGtXc0IwWEQwdz9ydGltZT1vVlREWlhLUjJVZw&id=%2Fpersonal%2Fsujoy%5Fpaul%5Femail%5Fucr%5Fedu%2FDocuments%2Fwtalc%2Dfeatures)
-, I3D features of `ActivityNet 1.3` dataset can be downloaded
-from [Google Drive](https://drive.google.com/drive/folders/1W2t4UKUkV_9duAsAFWU0HHYWbav2CZXp). The data directory
-structure is shown as follows:
+[THUMOS 14](http://crcv.ucf.edu/THUMOS14/download.html) and [ActivityNet](http://activity-net.org/download.html)
+datasets are used in this repo, you should download these datasets from official websites. The RGB and Flow features of
+these datasets are extracted by `utils.py` with `25FPS`. You should follow
+[this link](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7) to install OpenCV4 with CUDA. And then
+compile [denseFlow_GPU](https://github.com/daveboat/denseFlow_GPU), put the executable program in this dir. The options
+could be found in `utils.py`, this script will take a lot of time to extract the features. Finally, I3D features of
+these datasets are extracted by [this repo](https://github.com/Finspire13/pytorch-i3d-feature-extraction). To make this
+research friendly, we uploaded these I3D features in [GoogleDrive](https://pytorch.org/get-started/previous-versions/).
+You could download them from there, and make sure the data directory structure is organized as follows:
 
  ```
 ├── thumos14                                    |  ├── activitynet
-   ├── features                                  |    ├── features_1.2
+   ├── features                                  |   ├── features
        ├── val                                   |        ├── train 
            ├── flow                              |            ├── flow    
                ├── video_validation_0000051.npy  |                ├── v___dXUJsj3yo.npy

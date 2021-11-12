@@ -1,6 +1,8 @@
 import argparse
+import glob
 import os
 import random
+import subprocess
 
 import numpy as np
 import torch
@@ -132,22 +134,37 @@ def minmax_norm(act_map, min_val=None, max_val=None):
     return ret
 
 
-if __name__ == '__main__':
-    import glob
-    from tqdm import tqdm
-    import cv2.cv2 as cv2
+def which_ffmpeg():
+    result = subprocess.run(['which', 'ffmpeg'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return result.stdout.decode('utf-8').replace('\n', '')
 
-    videos = glob.glob('/data/thumos14/videos/*/*')
-    total_fps, min_frames, max_frames = set(), np.inf, -np.inf
-    bar = tqdm(videos, dynamic_ncols=True)
-    for video_name in bar:
-        video = cv2.VideoCapture(video_name)
-        fps = video.get(cv2.CAP_PROP_FPS)
-        frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
-        if frames < min_frames:
-            min_frames = frames
-        if frames > max_frames:
-            max_frames = frames
-        total_fps.add(fps)
-        bar.set_description('min-f: {} max-f: {} number fps: {}'.format(min_frames, max_frames, len(total_fps)))
-    print('min-f: {} max-f: {} fps: {}'.format(min_frames, max_frames, total_fps))
+
+if __name__ == '__main__':
+    description = 'Extract the RGB and Flow features from 25FPS videos'
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument('--data_path', type=str, default='/data')
+    parser.add_argument('--save_path', type=str, default='result')
+    parser.add_argument('--data_name', type=str, default='thumos14', choices=['thumos14', 'activitynet'])
+    parser.add_argument('--data_split', type=str, required=True)
+    args = parser.parse_args()
+
+    data_path, save_path, data_name, data_split = args.data_path, args.save_path, args.data_name, args.data_split
+
+    ffmpeg_path = which_ffmpeg()
+    videos = sorted(glob.glob('{}/{}/videos/{}/*'.format(data_path, data_name, data_split)))
+    total = len(videos)
+
+    for i, video_path in enumerate(videos):
+        dir_name, video_name = os.path.dirname(video_path).split('/')[-1], os.path.basename(video_path).split('.')[0]
+        save_root = 'result/{}/{}/{}'.format(data_name, dir_name, video_name)
+        # pass the already precessed videos
+        try:
+            os.makedirs(save_root)
+        except OSError:
+            continue
+        print('[{}/{}] Saving {} to {}/{}.mp4 with 25 fps'.format(i + 1, total, video_path, save_root, video_name))
+        ffmpeg_cmd = '{} -hide_banner -loglevel panic -i {} -r 25 -y {}/{}.mp4' \
+            .format(ffmpeg_path, video_path, save_root, video_name)
+        subprocess.call(ffmpeg_cmd.split())
+        flow_cmd = 'result/denseFlow_gpu -f={}/{}.mp4 -o={}'.format(save_root, video_name, save_root)
+        subprocess.call(flow_cmd.split())
