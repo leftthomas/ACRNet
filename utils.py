@@ -166,5 +166,5 @@ if __name__ == '__main__':
         ffmpeg_cmd = '{} -hide_banner -loglevel panic -i {} -r 25 -y {}/{}.mp4' \
             .format(ffmpeg_path, video_path, save_root, video_name)
         subprocess.call(ffmpeg_cmd.split())
-        flow_cmd = 'result/denseFlow_gpu -f={}/{}.mp4 -o={}'.format(save_root, video_name, save_root)
+        flow_cmd = 'denseFlow_gpu -f={}/{}.mp4 -o={}'.format(save_root, video_name, save_root)
         subprocess.call(flow_cmd.split())

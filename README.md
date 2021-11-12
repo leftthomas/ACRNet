@@ -27,12 +27,11 @@ mim install mmaction2
 datasets are used in this repo, you should download these datasets from official websites. The RGB and Flow features of
 these datasets are extracted by `utils.py` with `25FPS`. You should follow
 [this link](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7) to install OpenCV4 with CUDA. And then
-compile [denseFlow_GPU](https://github.com/daveboat/denseFlow_GPU), put the executable program in `result` dir. The
-options could be found in `utils.py`, this script will take a lot of time to extract the features. Finally, I3D features
-of these datasets are extracted by [this repo](https://github.com/Finspire13/pytorch-i3d-feature-extraction). To make
-this research friendly, we uploaded these I3D features
-in [GoogleDrive](https://pytorch.org/get-started/previous-versions/). You could download them from there, and make sure
-the data directory structure is organized as follows:
+compile [denseFlow_GPU](https://github.com/daveboat/denseFlow_GPU), put the executable program in this dir. The options
+could be found in `utils.py`, this script will take a lot of time to extract the features. Finally, I3D features of
+these datasets are extracted by [this repo](https://github.com/Finspire13/pytorch-i3d-feature-extraction). To make this
+research friendly, we uploaded these I3D features in [GoogleDrive](https://pytorch.org/get-started/previous-versions/).
+You could download them from there, and make sure the data directory structure is organized as follows:
 
  ```
 ├── thumos14                                    |  ├── activitynet
