@@ -52,8 +52,8 @@ def test_loop(network, config, data_loader, step):
 
             # do another minmax norm to rescale the posterior probabilities between [0, 1]
             score_cas = utils.minmax_norm(score_cas * feat_magnitudes)
-            score_pred = utils.upgrade_resolution(score_cas[:, pred].cpu().numpy(), config.scale)
-            feat_magnitudes_pred = utils.upgrade_resolution(feat_magnitudes[:, pred].cpu().numpy(), config.scale)
+            score_pred = utils.revert_frame(score_cas[:, pred].cpu().numpy(), config.scale)
+            feat_magnitudes_pred = utils.revert_frame(feat_magnitudes[:, pred].cpu().numpy(), config.scale)
 
             proposal_dict, status = {}, True
             # enrich the proposal pool by using multiple thresholds
