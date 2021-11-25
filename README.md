@@ -1,7 +1,7 @@
-# UM
+# RelationNet
 
-A PyTorch implementation of UM based on AAAI 2021 paper
-[Weakly-supervised Temporal Action Localization by Uncertainty Modeling](https://arxiv.org/abs/2006.07006).
+A PyTorch implementation of RelationNet based on ICME 2022 paper
+[Mining Relations for Weakly-Supervised Action Localization]().
 
 ![Network Architecture](result/structure.png)
 
@@ -29,31 +29,31 @@ these datasets are extracted by `utils.py` with `25FPS`. You should follow
 [this link](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7) to install OpenCV4 with CUDA. And then
 compile [denseFlow_GPU](https://github.com/daveboat/denseFlow_GPU), put the executable program in this dir. The options
 could be found in `utils.py`, this script will take a lot of time to extract the features. Finally, I3D features of
-these datasets are extracted by [this repo](https://github.com/Finspire13/pytorch-i3d-feature-extraction). To make this
-research friendly, we uploaded these I3D features in [GoogleDrive](https://pytorch.org/get-started/previous-versions/).
-You could download them from there, and make sure the data directory structure is organized as follows:
+these datasets are extracted by [this repo](https://github.com/Finspire13/pytorch-i3d-feature-extraction), the
+`extract_features.py` file should be replaced with `extract.py`, the options could be found in `extract.py`. To make
+this research friendly, we uploaded these I3D features
+in [GoogleDrive](https://drive.google.com/drive/folders/1wudi03iJQYZ3qN2RUHB5senFrbFrWUQw?usp=sharing). You could
+download them from there, and make sure the data directory structure is organized as follows:
 
  ```
 ├── thumos14                                    |  ├── activitynet
    ├── features                                  |   ├── features
-       ├── val                                   |        ├── train 
-           ├── flow                              |            ├── flow    
-               ├── video_validation_0000051.npy  |                ├── v___dXUJsj3yo.npy
-               └── ...                           |                └── ...
-           ├── rgb (same structure as flow)      |            ├── rgb
-       ├── test                                  |                ├── v___dXUJsj3yo.npy
-           ├── flow                              |                └── ...
-               ├── video_test_0000004.npy        |        ├── val (same structure as tain)
-               └── ...                           |    ├── features_1.3 (same structure as features_1.2)
-           ├── rgb (same structure as flow)      |    ├── videos
-   ├── videos                                    |        ├── train
-       ├── val                                   |            ├── v___c8enCfzqw.mp4
-           ├── video_validation_0000051.mp4      |            └──... 
-           └──...                                |         ├── val           
-       ├── test                                  |            ├── v__1vYKA7mNLI.mp4
-           ├──video_test_0000004.mp4             |            └──...   
-           └──...                                | annotations_1.2.json
-   annotations.json                              | annotations_1.3.json
+       ├── val                                   |       ├── train 
+           ├── video_validation_0000051_flow.npy |           ├── v___c8enCfzqw_flow.npy
+           ├── video_validation_0000051_rgb.npy  |           ├── v___c8enCfzqw_rgb.npy
+           └── ...                               |           └── ...                           
+       ├── test                                  |       ├── val                 
+           ├── video_test_0000004_flow.npy       |           ├── v__1vYKA7mNLI_flow.npy  
+           ├── video_test_0000004_rgb.npy        |           ├── v__1vYKA7mNLI_rgb.npy 
+           └── ...                               |           └── ...     
+   ├── videos                                    |   ├── videos  
+       ├── val                                   |       ├── train      
+           ├── video_validation_0000051.mp4      |           ├── v___c8enCfzqw.mp4
+           └──...                                |           └──...        
+       ├── test                                  |       ├── val           
+           ├── video_test_0000004.mp4            |           ├── v__1vYKA7mNLI.mp4
+           └──...                                |           └──...      
+   annotations.json                              | annotations_1.2.json, annotations_1.3.json
 ```
 
 ## Usage
@@ -70,13 +70,12 @@ python train.py --data_name activitynet1.2 --num_segments 50 --seed 0
 ### Test Model
 
 ```
-python test.py --model_file --data_name thumos14 --model_file result/thumos14_model.pth
+python test.py --data_name thumos14 --model_file result/thumos14_model.pth
 ```
 
 ## Benchmarks
 
-The models are trained on one NVIDIA GeForce GTX 1080 Ti GPU (11G). All the hyper-parameters are the default values
-according to the papers.
+The models are trained on one NVIDIA GeForce GTX 1080 Ti GPU (11G). All the hyper-parameters are the default values.
 
 ### THUMOS14
 
@@ -100,7 +99,7 @@ according to the papers.
 </thead>
 <tbody>
   <tr>
-    <td align="center">Ours</td>
+    <td align="center">RelationNet</td>
     <td align="center">60.3</td>
     <td align="center">54.3</td>
     <td align="center">45.7</td>
@@ -109,19 +108,7 @@ according to the papers.
     <td align="center">18.2</td>
     <td align="center">9.2</td>
     <td align="center">36.1</td>
-    <td align="center"><a href="https://pan.baidu.com/s/1mv-RHb9VNu2FYBdzjNehPA">kb79</a></td>
-  </tr>
-  <tr>
-    <td align="center">Official</td>
-    <td align="center">67.5</td>
-    <td align="center">61.2</td>
-    <td align="center">52.3</td>
-    <td align="center">43.4</td>
-    <td align="center">33.7</td>
-    <td align="center">22.9</td>
-    <td align="center">12.1</td>
-    <td align="center">41.9</td>
-    <td align="center">-</td>
+    <td align="center"><a href="https://pan.baidu.com/s/1mv-RHb9VNu2FYBdzjNehPA">GoogleDrive</a></td>
   </tr>
 </tbody>
 </table>
@@ -151,7 +138,7 @@ mAP@AVG is the average mAP under the thresholds 0.1:0.1:0.7.
 </thead>
 <tbody>
   <tr>
-    <td align="center">Ours</td>
+    <td align="center">RelationNet</td>
     <td align="center">41.2</td>
     <td align="center">25.6</td>
     <td align="center">6.0</td>
@@ -160,25 +147,9 @@ mAP@AVG is the average mAP under the thresholds 0.1:0.1:0.7.
     <td align="center">23.9</td>
     <td align="center">5.7</td>
     <td align="center">23.7</td>
-    <td align="center"><a href="https://pan.baidu.com/s/11_7eu29IQ50rBU2W-dFceg">wexe</a></td>
-  </tr>
-  <tr>
-    <td align="center">Official</td>
-    <td align="center">41.2</td>
-    <td align="center">25.6</td>
-    <td align="center">6.0</td>
-    <td align="center">25.9</td>
-    <td align="center">37.0</td>
-    <td align="center">23.9</td>
-    <td align="center">5.7</td>
-    <td align="center">23.7</td>
-    <td align="center">-</td>
+    <td align="center"><a href="https://pan.baidu.com/s/11_7eu29IQ50rBU2W-dFceg">GoogleDrive</a></td>
   </tr>
 </tbody>
 </table>
 
 mAP@AVG is the average mAP under the thresholds 0.5:0.05:0.95.
-
-## Reference
-
-This repo is built upon the repo [WTAL-Uncertainty-Modeling](https://github.com/Pilhyeon/WTAL-Uncertainty-Modeling).
