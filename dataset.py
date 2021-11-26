@@ -1,4 +1,3 @@
-import glob
 import json
 import os
 
@@ -42,7 +41,7 @@ class VideoDataset(Dataset):
 
     def __getitem__(self, index):
         rgb, flow = np.load(self.rgb[index]), np.load(self.flow[index])
-        video_name, num_seg = os.path.basename(self.rgb[index]).split('.')[0], rgb.shape[0]
+        video_name, num_seg = os.path.basename(self.rgb[index]).split('.')[0][: -4], rgb.shape[0]
         annotation = self.annotations['d_{}'.format(video_name)]
         sample_idx = self.random_sampling(num_seg) if self.data_type == 'train' else self.uniform_sampling(num_seg)
         rgb, flow = torch.from_numpy(rgb[sample_idx]), torch.from_numpy(flow[sample_idx])
@@ -56,43 +55,26 @@ class VideoDataset(Dataset):
         else:
             return feat, label, video_name, num_seg, annotation
 
-    def random_sampling(self, length):
-        if self.num_seg == length:
-            return np.arange(length).astype(int)
-        samples = np.arange(self.num_seg) * length / self.num_seg
+    def random_sampling(self, num_seg):
+        if self.num_seg == num_seg:
+            return np.arange(num_seg).astype(int)
+        sample_idx = np.arange(self.num_seg) * num_seg / self.num_seg
         for i in range(self.num_seg):
             if i < self.num_seg - 1:
-                if int(samples[i]) != int(samples[i + 1]):
-                    samples[i] = np.random.choice(range(int(samples[i]), int(samples[i + 1]) + 1))
+                if int(sample_idx[i]) != int(sample_idx[i + 1]):
+                    sample_idx[i] = np.random.choice(range(int(sample_idx[i]), int(sample_idx[i + 1]) + 1))
                 else:
-                    samples[i] = int(samples[i])
+                    sample_idx[i] = int(sample_idx[i])
             else:
-                if int(samples[i]) < length - 1:
-                    samples[i] = np.random.choice(range(int(samples[i]), length))
+                if int(sample_idx[i]) < num_seg - 1:
+                    sample_idx[i] = np.random.choice(range(int(sample_idx[i]), num_seg))
                 else:
-                    samples[i] = int(samples[i])
-        return samples.astype(int)
+                    sample_idx[i] = int(sample_idx[i])
+        return sample_idx.astype(int)
 
-    def uniform_sampling(self, length):
+    def uniform_sampling(self, num_seg):
         # because the length may different as these two line codes, make sure batch size == 1 in test mode
-        if length <= self.num_seg:
-            return np.arange(length).astype(int)
+        if num_seg <= self.num_seg:
+            return np.arange(num_seg).astype(int)
         else:
-            return np.floor(np.arange(self.num_seg) * length / self.num_seg).astype(int)
-
-
-if __name__ == '__main__':
-    import cv2.cv2 as cv2
-
-    videos = sorted(glob.glob('/data/activitynet/splits/*/*/*.mp4'))
-    new_features = sorted(glob.glob('/data/activitynet/features/*/*_rgb.npy'))
-    news = {}
-    for feature in new_features:
-        news[os.path.basename(feature).split('.')[0][:-4]] = feature
-    for video_name in videos:
-        video = cv2.VideoCapture(video_name)
-        fps = video.get(cv2.CAP_PROP_FPS)
-        assert fps == 25
-        frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
-        new_feature = np.load(news[os.path.basename(video_name).split('.')[0]])
-        assert len(new_feature) == int(frames - 1) // 16
+            return np.floor(np.arange(self.num_seg) * num_seg / self.num_seg).astype(int)

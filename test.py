@@ -120,3 +120,20 @@ if __name__ == '__main__':
     test_info = test_loop(net, args, test_loader, 0)
     with open(os.path.join(args.save_path, '{}_record.json'.format(args.data_name)), 'w') as f:
         json.dump(test_info, f, indent=4)
+
+#
+# if __name__ == '__main__':
+#     import cv2.cv2 as cv2
+#     import glob
+#     videos = sorted(glob.glob('/data/activitynet/splits/*/*/*.mp4'))
+#     new_features = sorted(glob.glob('/data/activitynet/features/*/*_rgb.npy'))
+#     news = {}
+#     for feature in new_features:
+#         news[os.path.basename(feature).split('.')[0][:-4]] = feature
+#     for video_name in videos:
+#         video = cv2.VideoCapture(video_name)
+#         fps = video.get(cv2.CAP_PROP_FPS)
+#         assert fps == 25
+#         frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
+#         new_feature = np.load(news[os.path.basename(video_name).split('.')[0]])
+#         assert len(new_feature) == int(frames - 1) // 16
