@@ -24,9 +24,11 @@ class VideoDataset(Dataset):
             annotations = json.load(f)
 
         # prepare data
-        self.features, self.annotations, classes, self.class_to_idx, self.idx_to_class = [], {}, set(), {}, {}
+        self.rgb, self.flow, self.annotations, classes, self.class_to_idx, self.idx_to_class = [], [], {}, set(), {}, {}
         for key, value in annotations.items():
             if value['subset'] == data_type:
+                self.rgb.append('{}/{}/features/{}/{}_rgb.npy'.format(data_path, data_name, data_type, key))
+                self.flow.append('{}/{}/features/{}/{}_flow.npy'.format(data_path, data_name, data_type, key))
                 # the prefix is added to compatible with ActivityNetLocalization class
                 self.annotations['d_{}'.format(key)] = {'annotations': value['annotations']}
                 for annotation in value['annotations']:
@@ -36,7 +38,7 @@ class VideoDataset(Dataset):
             self.idx_to_class[i] = key
 
     def __len__(self):
-        return len(self.features)
+        return len(self.rgb)
 
     def __getitem__(self, index):
         rgb, flow = np.load(self.rgb[index]), np.load(self.flow[index])
@@ -80,33 +82,17 @@ class VideoDataset(Dataset):
 
 
 if __name__ == '__main__':
-    saved_dict = {}
-    for data_type in ['val', 'test']:
-        for label_file in sorted(glob.glob('/Users/leftthomas/Downloads/{}/*.txt'.format(data_type))):
-            label = os.path.basename(label_file).split('.')[0][:-len(data_type) - 1]
-            with open(label_file, 'r') as f:
-                for line in f.readlines():
-                    line = line.strip('\n')
-                    key, start, end = line.split()
-                    if key not in saved_dict:
-                        saved_dict[key] = {'subset': data_type, 'annotations': [
-                            {'segment': [float(start), float(end)], 'label': label}]}
-                    else:
-                        saved_dict[key]['annotations'].append({'segment': [float(start), float(end)], 'label': label})
-    with open('/Users/leftthomas/Downloads/annotations.json', 'w') as f:
-        json.dump(saved_dict, f, indent=4)
+    import cv2.cv2 as cv2
 
-    # import cv2.cv2 as cv2
-    #
-    # videos = sorted(glob.glob('/data/activitynet/splits/*/*/*.mp4'))
-    # new_features = sorted(glob.glob('/data/activitynet/features/*/*_rgb.npy'))
-    # news = {}
-    # for feature in new_features:
-    #     news[os.path.basename(feature).split('.')[0][:-4]] = feature
-    # for video_name in videos:
-    #     video = cv2.VideoCapture(video_name)
-    #     fps = video.get(cv2.CAP_PROP_FPS)
-    #     assert fps == 25
-    #     frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
-    #     new_feature = np.load(news[os.path.basename(video_name).split('.')[0]])
-    #     assert len(new_feature) == int(frames - 1) // 16
+    videos = sorted(glob.glob('/data/activitynet/splits/*/*/*.mp4'))
+    new_features = sorted(glob.glob('/data/activitynet/features/*/*_rgb.npy'))
+    news = {}
+    for feature in new_features:
+        news[os.path.basename(feature).split('.')[0][:-4]] = feature
+    for video_name in videos:
+        video = cv2.VideoCapture(video_name)
+        fps = video.get(cv2.CAP_PROP_FPS)
+        assert fps == 25
+        frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
+        new_feature = np.load(news[os.path.basename(video_name).split('.')[0]])
+        assert len(new_feature) == int(frames - 1) // 16

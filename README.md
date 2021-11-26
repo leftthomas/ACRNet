@@ -38,19 +38,19 @@ download them from there, and make sure the data directory structure is organize
  ```
 ├── thumos14                                    |  ├── activitynet
    ├── features                                  |   ├── features
-       ├── val                                   |       ├── train 
+       ├── val                                   |       ├── training 
            ├── video_validation_0000051_flow.npy |           ├── v___c8enCfzqw_flow.npy
            ├── video_validation_0000051_rgb.npy  |           ├── v___c8enCfzqw_rgb.npy
            └── ...                               |           └── ...                           
-       ├── test                                  |       ├── val                 
+       ├── test                                  |       ├── validation                 
            ├── video_test_0000004_flow.npy       |           ├── v__1vYKA7mNLI_flow.npy  
            ├── video_test_0000004_rgb.npy        |           ├── v__1vYKA7mNLI_rgb.npy 
            └── ...                               |           └── ...     
    ├── videos                                    |   ├── videos  
-       ├── val                                   |       ├── train      
+       ├── val                                   |       ├── training      
            ├── video_validation_0000051.mp4      |           ├── v___c8enCfzqw.mp4
            └──...                                |           └──...        
-       ├── test                                  |       ├── val           
+       ├── test                                  |       ├── validation           
            ├── video_test_0000004.mp4            |           ├── v__1vYKA7mNLI.mp4
            └──...                                |           └──...      
    annotations.json                              | annotations_1.2.json, annotations_1.3.json
