@@ -84,7 +84,7 @@ def test_loop(network, config, data_loader, step):
             for class_id in proposal_dict.keys():
                 proposals = temporal_nms(np.array(proposal_dict[class_id]), config.iou_th)
                 final_proposals[class_id] = proposals.tolist()
-            results['results'][video_name] = utils.result2json(final_proposals, data_loader.dataset.idx_to_class_name)
+            results['results'][video_name] = utils.result2json(final_proposals, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total
 
@@ -113,10 +113,9 @@ def test_loop(network, config, data_loader, step):
 
 if __name__ == '__main__':
     args = utils.parse_args()
-    test_loader = DataLoader(VideoDataset(args.data_path, args.data_name, 'test', args.num_segments), batch_size=1,
-                             shuffle=False, num_workers=args.num_workers, worker_init_fn=args.worker_init_fn)
-
-    net = Model(args.r_act, args.r_bkg, len(test_loader.dataset.class_name_to_idx))
+    dataset = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
+    test_loader = DataLoader(dataset, batch_size=1, shuffle=False)
+    net = Model(len(dataset.class_to_idx))
 
     test_info = test_loop(net, args, test_loader, 0)
     with open(os.path.join(args.save_path, '{}_record.json'.format(args.data_name)), 'w') as f:

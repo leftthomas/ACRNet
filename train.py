@@ -50,10 +50,10 @@ def train_loop(network, data_loader, train_optimizer, n_iter):
 
 if __name__ == '__main__':
     args = utils.parse_args()
-    train_loader = DataLoader(VideoDataset(args.data_path, args.data_name, 'train', args.num_segments),
+    train_loader = DataLoader(VideoDataset(args.data_path, args.data_name, 'train', args.num_seg),
                               batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                               worker_init_fn=args.worker_init_fn)
-    test_loader = DataLoader(VideoDataset(args.data_path, args.data_name, 'test', args.num_segments), batch_size=1,
+    test_loader = DataLoader(VideoDataset(args.data_path, args.data_name, 'test', args.num_seg), batch_size=1,
                              shuffle=False, num_workers=args.num_workers, worker_init_fn=args.worker_init_fn)
 
     net = Model(args.r_act, args.r_bkg, len(train_loader.dataset.class_name_to_idx)).cuda()
