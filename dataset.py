@@ -1,6 +1,8 @@
+import glob
 import json
 import os
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -78,19 +80,33 @@ class VideoDataset(Dataset):
 
 
 if __name__ == '__main__':
-    import glob
-    import cv2.cv2 as cv2
-    import numpy as np
+    saved_dict = {}
+    for data_type in ['val', 'test']:
+        for label_file in sorted(glob.glob('/Users/leftthomas/Downloads/{}/*.txt'.format(data_type))):
+            label = os.path.basename(label_file).split('.')[0][:-len(data_type) - 1]
+            with open(label_file, 'r') as f:
+                for line in f.readlines():
+                    line = line.strip('\n')
+                    key, start, end = line.split()
+                    if key not in saved_dict:
+                        saved_dict[key] = {'subset': data_type, 'annotations': [
+                            {'segment': [float(start), float(end)], 'label': label}]}
+                    else:
+                        saved_dict[key]['annotations'].append({'segment': [float(start), float(end)], 'label': label})
+    with open('/Users/leftthomas/Downloads/annotations.json', 'w') as f:
+        json.dump(saved_dict, f, indent=4)
 
-    videos = sorted(glob.glob('/data/activitynet/splits/*/*/*.mp4'))
-    new_features = sorted(glob.glob('/data/activitynet/features/*/*_rgb.npy'))
-    news = {}
-    for feature in new_features:
-        news[os.path.basename(feature).split('.')[0][:-4]] = feature
-    for video_name in videos:
-        video = cv2.VideoCapture(video_name)
-        fps = video.get(cv2.CAP_PROP_FPS)
-        assert fps == 25
-        frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
-        new_feature = np.load(news[os.path.basename(video_name).split('.')[0]])
-        assert len(new_feature) == int(frames - 1) // 16
+    # import cv2.cv2 as cv2
+    #
+    # videos = sorted(glob.glob('/data/activitynet/splits/*/*/*.mp4'))
+    # new_features = sorted(glob.glob('/data/activitynet/features/*/*_rgb.npy'))
+    # news = {}
+    # for feature in new_features:
+    #     news[os.path.basename(feature).split('.')[0][:-4]] = feature
+    # for video_name in videos:
+    #     video = cv2.VideoCapture(video_name)
+    #     fps = video.get(cv2.CAP_PROP_FPS)
+    #     assert fps == 25
+    #     frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
+    #     new_feature = np.load(news[os.path.basename(video_name).split('.')[0]])
+    #     assert len(new_feature) == int(frames - 1) // 16
