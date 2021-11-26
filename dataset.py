@@ -56,20 +56,9 @@ class VideoDataset(Dataset):
             return feat, label, video_name, num_seg, annotation
 
     def random_sampling(self, num_seg):
-        if self.num_seg == num_seg:
-            return np.arange(num_seg).astype(int)
         sample_idx = np.arange(self.num_seg) * num_seg / self.num_seg
         for i in range(self.num_seg):
-            if i < self.num_seg - 1:
-                if int(sample_idx[i]) != int(sample_idx[i + 1]):
-                    sample_idx[i] = np.random.choice(range(int(sample_idx[i]), int(sample_idx[i + 1]) + 1))
-                else:
-                    sample_idx[i] = int(sample_idx[i])
-            else:
-                if int(sample_idx[i]) < num_seg - 1:
-                    sample_idx[i] = np.random.choice(range(int(sample_idx[i]), num_seg))
-                else:
-                    sample_idx[i] = int(sample_idx[i])
+            sample_idx[i] = np.random.choice(range(int(sample_idx[i]), int(sample_idx[i + 1]) + 1))
         return sample_idx.astype(int)
 
     def uniform_sampling(self, num_seg):

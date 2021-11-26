@@ -2,6 +2,7 @@ import json
 import os
 
 import torch
+import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -16,14 +17,10 @@ def train_loop(network, data_loader, train_optimizer, n_iter):
     network.train()
     data, label = next(data_loader)
     data, label = data.cuda(), label.cuda()
-    label_act = label / torch.sum(label, dim=-1, keepdim=True)
-    # a trick to flexible use bce Loss to formula be loss
-    label_bkg = torch.ones_like(label)
-    label_bkg /= torch.sum(label_bkg, dim=-1, keepdim=True)
-
+    label = label / torch.sum(label, dim=-1, keepdim=True)
     train_optimizer.zero_grad()
-    score_act, feat_act = network(data)
-    loss = bce_criterion(score_act, label_act)
+    feat, score = network(data)
+    loss = bce_criterion(score, label)
     loss.backward()
     train_optimizer.step()
 
@@ -40,7 +37,7 @@ if __name__ == '__main__':
     net = Model(len(train_data.class_to_idx)).cuda()
     optimizer = Adam(net.parameters())
 
-    best_mAP, metric_info = 0, {}
+    best_mAP, metric_info, bce_criterion = 0, {}, nn.BCELoss()
     train_bar = tqdm(range(1, args.num_iter + 1), total=args.num_iter, initial=1, dynamic_ncols=True)
     for step in train_bar:
         if (step - 1) % len(train_loader) == 0:
