@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 
@@ -13,5 +14,7 @@ class Model(nn.Module):
         # [N, T, D]
         feat = out.permute(0, 2, 1)
         # [N, T, C]
-        score = self.fc(out).permute(0, 2, 1)
-        return feat, score
+        seg_score = self.fc(out).permute(0, 2, 1)
+        # [N, C]
+        video_score = torch.softmax(torch.mean(seg_score, dim=1), dim=-1)
+        return feat, video_score, seg_score

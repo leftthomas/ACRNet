@@ -19,8 +19,8 @@ def train_loop(network, data_loader, train_optimizer, n_iter):
     data, label = data.cuda(), label.cuda()
     label = label / torch.sum(label, dim=-1, keepdim=True)
     train_optimizer.zero_grad()
-    feat, score = network(data)
-    loss = bce_criterion(score, label)
+    feat, video_score, seg_score = network(data)
+    loss = bce_criterion(video_score, label)
     loss.backward()
     train_optimizer.step()
 
