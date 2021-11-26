@@ -4,7 +4,6 @@ import os
 import numpy as np
 import torch
 from mmaction.core.evaluation import ActivityNetLocalization
-from mmaction.localization import temporal_nms
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -28,7 +27,8 @@ def test_loop(network, config, data_loader, step):
             feat, video_score, seg_score = network(feat)
             feat, video_score, seg_score = feat.squeeze(0), video_score.squeeze(0), seg_score.squeeze(0)
 
-            num_correct += 1 if torch.equal(label, torch.ge(video_score, config.act_th).float()) else 0
+            pred = torch.ge(video_score, config.act_th)
+            num_correct += 1 if torch.equal(label, pred.float()) else 0
             num_total += 1
 
             frame_score = utils.revert_frame(seg_score.cpu().numpy(), config.rate * num_seg)
@@ -37,22 +37,20 @@ def test_loop(network, config, data_loader, step):
             frame_score[frame_score > 1] = 1.0
 
             proposal_dict = {}
-            frame_score[frame_score < config.act_th] = 0
-            proposals = utils.grouping(frame_score)
-            for j in range(len(proposals)):
-                if len(proposals[j]) == 0:
-                    continue
-                class_id = proposals[j][0][0]
-                if class_id not in proposal_dict.keys():
-                    proposal_dict[class_id] = []
-                proposal_dict[class_id] += np.array(proposals[j])[:, 1:].tolist()
+            for i, status in enumerate(pred):
+                if status:
+                    proposals = utils.grouping(np.where(frame_score[:, i] >= config.act_th)[0])
+                    for proposal in proposals:
+                        # make sure the proposal to be regions
+                        if len(proposal) >= 2:
+                            if i not in proposal_dict.keys():
+                                proposal_dict[i] = []
+                            start, end, score = proposal[0], proposal[-1], np.mean(frame_score[proposal, i])
+                            # change frame index to second
+                            start, end = (start + 1) / config.fps, (end + 1) / config.fps
+                            proposal_dict[i].append([start, end, score])
 
-            final_proposals = {}
-            # temporal nms
-            for class_id in proposal_dict.keys():
-                proposals = temporal_nms(np.array(proposal_dict[class_id]), config.iou_th)
-                final_proposals[class_id] = proposals.tolist()
-            results['results'][video_name] = utils.result2json(final_proposals, data_loader.dataset.idx_to_class)
+            results['results'][video_name] = utils.result2json(proposal_dict, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total
 
@@ -65,15 +63,15 @@ def test_loop(network, config, data_loader, step):
 
         # evaluate the metrics
         evaluator_atl = ActivityNetLocalization(gt_path, pred_path, tiou_thresholds=config.map_th, verbose=False)
-        mAP, mAP_avg = evaluator_atl.evaluate()
+        m_ap, m_ap_avg = evaluator_atl.evaluate()
 
         desc = 'Test Step: [{}/{}] Test ACC: {:.1f} mAP@AVG: {:.1f}'.format(step, config.num_iter, test_acc * 100,
-                                                                            mAP_avg * 100)
+                                                                            m_ap_avg * 100)
         metric_info['Test ACC'] = round(test_acc * 100, 1)
-        metric_info['mAP@AVG'] = round(mAP_avg * 100, 1)
+        metric_info['mAP@AVG'] = round(m_ap_avg * 100, 1)
         for i in range(config.map_th.shape[0]):
-            desc += ' mAP@{:.2f}: {:.1f}'.format(config.map_th[i], mAP[i] * 100)
-            metric_info['mAP@{:.2f}'.format(config.map_th[i])] = round(mAP[i] * 100, 1)
+            desc += ' mAP@{:.2f}: {:.1f}'.format(config.map_th[i], m_ap[i] * 100)
+            metric_info['mAP@{:.2f}'.format(config.map_th[i])] = round(m_ap[i] * 100, 1)
         print(desc)
         return metric_info
 

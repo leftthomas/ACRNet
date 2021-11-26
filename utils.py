@@ -18,7 +18,6 @@ def parse_args():
     parse.add_argument('--data_name', type=str, default='thumos14',
                        choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
     parse.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
-    parse.add_argument('--iou_th', type=float, default=0.6, help='threshold for NMS IoU')
     parse.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
     parse.add_argument('--fps', type=int, default=25)
     parse.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
@@ -37,7 +36,6 @@ class Config(object):
         self.save_path = arg.save_path
         self.data_name = arg.data_name
         self.act_th = arg.act_th
-        self.iou_th = arg.iou_th
         self.map_th = arg.map_th
         self.num_seg = arg.num_seg
         self.fps = arg.fps
@@ -73,15 +71,16 @@ def revert_frame(scores, num_frame):
 
 
 # split frames to action regions
-def grouping(arr):
-    return np.split(arr, np.where(np.diff(arr) != 1)[0] + 1)
+def grouping(frames):
+    return np.split(frames, np.where(np.diff(frames) != 1)[0] + 1)
 
 
 def result2json(result, class_dict):
     result_file = []
     for key, value in result.items():
         for line in value:
-            result_file.append({'label': class_dict[key], 'score': line[-1], 'segment': [line[0], line[1]]})
+            result_file.append({'label': class_dict[key], 'score': float(line[-1]),
+                                'segment': [float(line[0]), float(line[1])]})
     return result_file
 
 
