@@ -65,10 +65,10 @@ def init_args(arg):
 
 
 # change the segment based scores to frame based scores
-def revert_frame(scores, rate):
-    x = np.arange(0, scores.shape[0])
+def revert_frame(scores, num_frame):
+    x = np.arange(scores.shape[0])
     f = interp1d(x, scores, kind='linear', axis=0, fill_value='extrapolate')
-    scale = np.arange(0, scores.shape[0], 1 / rate)
+    scale = np.arange(num_frame) * scores.shape[0] / num_frame
     return f(scale)
 
 

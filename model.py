@@ -17,4 +17,6 @@ class Model(nn.Module):
         seg_score = self.fc(out).permute(0, 2, 1)
         # [N, C]
         video_score = torch.softmax(torch.mean(seg_score, dim=1), dim=-1)
+        # [N, T, C]
+        seg_score = torch.softmax(seg_score, dim=-1)
         return feat, video_score, seg_score

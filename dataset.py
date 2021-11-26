@@ -53,7 +53,7 @@ class VideoDataset(Dataset):
         if self.data_type == 'train':
             return feat, label
         else:
-            return feat, label, video_name, num_seg, annotation
+            return feat, label, video_name, num_seg
 
     def random_sampling(self, num_seg):
         sample_idx = np.append(np.arange(self.num_seg) * num_seg / self.num_seg, num_seg)
