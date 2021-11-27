@@ -4,7 +4,6 @@ import os
 import numpy as np
 import torch
 from mmaction.core.evaluation import ActivityNetLocalization
-from mmaction.localization import temporal_nms
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -40,19 +39,17 @@ def test_loop(network, config, data_loader, step):
             proposal_dict = {}
             for i, status in enumerate(pred):
                 if status:
-                    for frame_th in config.fra_th:
-                        proposals = utils.grouping(np.where(frame_score[:, i] >= frame_th)[0])
-                        for proposal in proposals:
-                            # make sure the proposal to be regions
-                            if len(proposal) >= 2:
-                                if i not in proposal_dict.keys():
-                                    proposal_dict[i] = []
-                                start, end, score = proposal[0], proposal[-1], np.mean(frame_score[proposal, i])
-                                # change frame index to second
-                                start, end = (start + 1) / config.fps, (end + 1) / config.fps
-                                proposal_dict[i].append([start, end, score])
-                    # temporal nms
-                    proposal_dict[i] = temporal_nms(np.array(proposal_dict[i]), config.iou_th).tolist()
+                    proposals = utils.grouping(np.where(frame_score[:, i] >= config.act_th)[0])
+                    for proposal in proposals:
+                        # make sure the proposal to be regions
+                        if len(proposal) >= 2:
+                            if i not in proposal_dict.keys():
+                                proposal_dict[i] = []
+                            start, end, score = proposal[0], proposal[-1], np.mean(frame_score[proposal, i])
+                            # change frame index to second
+                            start, end = (start + 1) / config.fps, (end + 1) / config.fps
+                            proposal_dict[i].append([start, end, score])
+
             results['results'][video_name] = utils.result2json(proposal_dict, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total
