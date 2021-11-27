@@ -18,6 +18,8 @@ def parse_args():
     parse.add_argument('--data_name', type=str, default='thumos14',
                        choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
     parse.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
+    parse.add_argument('--fra_th', type=str, default='np.arange(0.0, 0.25, 0.025)', help='threshold for frame score')
+    parse.add_argument('--iou_th', type=float, default=0.6, help='threshold for NMS IoU')
     parse.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
     parse.add_argument('--fps', type=int, default=25)
     parse.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
@@ -36,6 +38,8 @@ class Config(object):
         self.save_path = arg.save_path
         self.data_name = arg.data_name
         self.act_th = arg.act_th
+        self.fra_th = eval(arg.fra_th)
+        self.iou_th = arg.iou_th
         self.map_th = arg.map_th
         self.num_seg = arg.num_seg
         self.fps = arg.fps
