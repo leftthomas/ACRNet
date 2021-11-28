@@ -35,7 +35,7 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False)
 
     net = Model(len(train_data.class_to_idx)).cuda()
-    optimizer = Adam(net.parameters(), lr=1e-4)
+    optimizer = Adam(net.parameters())
 
     best_mAP, metric_info, bce_criterion = 0, {}, nn.BCELoss()
     train_bar = tqdm(range(1, args.num_iter + 1), total=args.num_iter, initial=1, dynamic_ncols=True)
