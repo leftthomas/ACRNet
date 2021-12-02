@@ -24,13 +24,20 @@ def test_loop(network, config, data_loader, step):
         for feat, label, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             feat, label, video_name, num_seg = feat.cuda(), label.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
             num_seg, used_seg = num_seg.item(), feat.shape[1]
-            feat, video_score, seg_score = network(feat)
-            feat, video_score, seg_score = feat.squeeze(0), video_score.squeeze(0), seg_score.squeeze(0)
+            _, _, feat, act_score, _, seg_score = network(feat)
+            # [T, D],  [C],  [T, C]
+            feat, act_score, seg_score = feat.squeeze(0), act_score.squeeze(0), seg_score.squeeze(0)
 
-            pred = torch.ge(video_score, config.act_th)
+            pred = torch.ge(act_score, config.act_th)
             num_correct += 1 if torch.equal(label, pred.float()) else 0
             num_total += 1
 
+            # combine norm and score to obtain final score
+            seg_norm = torch.norm(feat, p=2, dim=-1, keepdim=True)
+            max_norm = torch.amax(seg_norm, dim=0, keepdim=True)
+            if max_norm != 0.0:
+                seg_norm = seg_norm / max_norm
+            seg_score = seg_norm * seg_score
             frame_score = utils.revert_frame(seg_score.cpu().numpy(), config.rate * num_seg)
             # make sure the score between [0, 1]
             frame_score[frame_score < 0] = 0.0
@@ -80,13 +87,12 @@ if __name__ == '__main__':
     args = utils.parse_args()
     dataset = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(dataset, batch_size=1, shuffle=False)
-    net = Model(len(dataset.class_to_idx))
+    net = Model(len(dataset.class_to_idx), args.select_ratio, args.temperature)
 
     test_info = test_loop(net, args, test_loader, 0)
     with open(os.path.join(args.save_path, '{}_record.json'.format(args.data_name)), 'w') as f:
         json.dump(test_info, f, indent=4)
 
-#
 # if __name__ == '__main__':
 #     import cv2.cv2 as cv2
 #     import glob

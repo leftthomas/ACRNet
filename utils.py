@@ -19,6 +19,11 @@ def parse_args():
                        choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
     parse.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
     parse.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
+    parse.add_argument('--select_ratio', type=float, default=0.1,
+                       help='selected top/bottom k segments for action/background')
+    parse.add_argument('--temperature', type=float, default=0.05,
+                       help='used temperature scale for softmax')
+    parse.add_argument('--alpha', type=float, default=0.0005)
     parse.add_argument('--fps', type=int, default=25)
     parse.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
     parse.add_argument('--num_iter', type=int, default=10000)
@@ -38,6 +43,9 @@ class Config(object):
         self.act_th = arg.act_th
         self.map_th = arg.map_th
         self.num_seg = arg.num_seg
+        self.select_ratio = arg.select_ratio
+        self.temperature = arg.temperature
+        self.alpha = arg.alpha
         self.fps = arg.fps
         self.rate = arg.rate
         self.num_iter = arg.num_iter
