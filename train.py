@@ -28,7 +28,14 @@ def train_loop(network, data_loader, train_optimizer, n_iter):
 
     act_norm = torch.norm(act_feat, p=2, dim=-1)
     bkg_norm = torch.norm(bkg_feat, p=2, dim=-1)
-    norm_loss = torch.mean((torch.relu(1.0 - act_norm) + bkg_norm) ** 2)
+    max_act_norm = torch.amax(act_norm, dim=-1, keepdim=True)
+    max_bkg_norm = torch.amax(bkg_norm, dim=-1, keepdim=True)
+    max_norm = torch.where(torch.gt(max_act_norm, max_bkg_norm), max_act_norm, max_bkg_norm)
+    max_norm = torch.where(torch.eq(max_norm, 0.0), torch.ones_like(max_norm), max_norm)
+    act_norm = act_norm / max_norm
+    bkg_norm = bkg_norm / max_norm
+
+    norm_loss = torch.mean((1.0 - act_norm + bkg_norm) ** 2)
     loss = act_loss + bkg_loss + args.alpha * norm_loss
     loss.backward()
     train_optimizer.step()

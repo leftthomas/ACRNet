@@ -35,8 +35,8 @@ def test_loop(network, config, data_loader, step):
             # combine norm and score to obtain final score
             seg_norm = torch.norm(feat, p=2, dim=-1, keepdim=True)
             max_norm = torch.amax(seg_norm, dim=0, keepdim=True)
-            if max_norm != 0.0:
-                seg_norm = seg_norm / max_norm
+            max_norm = torch.where(torch.eq(max_norm, 0.0), torch.ones_like(max_norm), max_norm)
+            seg_norm = seg_norm / max_norm
             seg_score = seg_norm * seg_score
             frame_score = utils.revert_frame(seg_score.cpu().numpy(), config.rate * num_seg)
             # make sure the score between [0, 1]
