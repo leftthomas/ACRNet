@@ -34,9 +34,12 @@ class Model(nn.Module):
         # [N, K*C, D]
         act_feat = torch.take_along_dim(feat, torch.flatten(top_idx, start_dim=1).unsqueeze(dim=-1), dim=1)
         bkg_feat = torch.take_along_dim(feat, torch.flatten(bottom_idx, start_dim=1).unsqueeze(dim=-1), dim=1)
+        # [N, C]
+        act_norm = torch.mean(torch.norm(act_feat.view(act_feat.shape[0], k, -1), p=2, dim=-1), dim=1)
+        bkg_norm = torch.mean(torch.norm(bkg_feat.view(bkg_feat.shape[0], k, -1), p=2, dim=-1), dim=1)
         # [N, T, C]
         seg_score = torch.softmax(seg_score / self.temperature, dim=-1)
-        return act_feat, bkg_feat, feat, act_score, bkg_score, seg_score
+        return act_norm, bkg_norm, feat, act_score, bkg_score, seg_score
 
 # if __name__ == '__main__':
 #     import glob
