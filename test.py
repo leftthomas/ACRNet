@@ -4,6 +4,7 @@ import os
 import numpy as np
 import torch
 from mmaction.core.evaluation import ActivityNetLocalization
+from mmaction.localization import temporal_nms
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -24,40 +25,78 @@ def test_loop(network, config, data_loader, step):
         for feat, label, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             feat, label, video_name, num_seg = feat.cuda(), label.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
             num_seg, used_seg = num_seg.item(), feat.shape[1]
-            _, _, feat, act_score, _, seg_score = network(feat)
+            act_norm, bkg_norm, feat, act_score, _, seg_score = network(feat)
             # [T, D],  [C],  [T, C]
             feat, act_score, seg_score = feat.squeeze(0), act_score.squeeze(0), seg_score.squeeze(0)
-
+            act_norm, bkg_norm = act_norm.squeeze(0), bkg_norm.squeeze(0)
             pred = torch.ge(act_score, config.act_th)
             num_correct += 1 if torch.equal(label, pred.float()) else 0
             num_total += 1
 
+            def minmax_norm(act_map, min_val=None, max_val=None):
+                if min_val is None or max_val is None:
+                    min_val, max_val = torch.aminmax(act_map, dim=0, keepdim=True)
+                    min_val, max_val = torch.relu(min_val), torch.relu(max_val)
+
+                delta = max_val - min_val
+                delta[delta <= 0] = 1
+                ret = (act_map - min_val) / delta
+
+                ret[ret > 1] = 1
+                ret[ret < 0] = 0
+
+                return ret
+
             # combine norm and score to obtain final score
             seg_norm = torch.norm(feat, p=2, dim=-1, keepdim=True)
-            min_norm, max_norm = torch.aminmax(seg_norm, dim=0, keepdim=True)
-            max_norm = torch.where(torch.eq(max_norm, 0.0), torch.ones_like(max_norm), max_norm)
-            seg_norm = (seg_norm - min_norm) / max_norm
-            seg_score = seg_norm * seg_score
+            min_norm = bkg_norm.mean(dim=-1, keepdim=True).unsqueeze(dim=-1)
+            max_norm = act_norm.mean(dim=-1, keepdim=True).unsqueeze(dim=-1)
+
+            seg_norm = minmax_norm(seg_norm, min_norm, max_norm)
+            seg_score = minmax_norm(seg_norm * seg_score)
+
             frame_score = utils.revert_frame(seg_score.cpu().numpy(), config.rate * num_seg)
             # make sure the score between [0, 1]
             frame_score[frame_score < 0] = 0.0
             frame_score[frame_score > 1] = 1.0
 
-            proposal_dict = {}
-            for i, status in enumerate(pred):
-                if status:
-                    proposals = utils.grouping(np.where(frame_score[:, i] >= config.act_th)[0])
-                    for proposal in proposals:
-                        # make sure the proposal to be regions
-                        if len(proposal) >= 2:
-                            if i not in proposal_dict.keys():
-                                proposal_dict[i] = []
-                            start, end, score = proposal[0], proposal[-1], np.mean(frame_score[proposal, i])
-                            # change frame index to second
-                            start, end = (start + 1) / config.fps, (end + 1) / config.fps
-                            proposal_dict[i].append([start, end, score])
+            frame_norm = utils.revert_frame(seg_norm.cpu().numpy(), config.rate * num_seg)
+            # make sure the norm between [0, 1]
+            frame_norm[frame_norm < 0] = 0.0
+            frame_norm[frame_norm > 1] = 1.0
+            frame_norm = frame_norm.repeat(len(data_loader.dataset.idx_to_class), axis=-1)
 
-            results['results'][video_name] = utils.result2json(proposal_dict, data_loader.dataset.idx_to_class)
+            proposal_dict = {}
+            # enrich the proposal pool by using multiple thresholds
+            for threshold, temp_pred in zip([config.seg_th, config.mag_th], [frame_score, frame_norm]):
+                for i in range(len(threshold)):
+                    for j, status in enumerate(pred):
+                        if status:
+                            proposals = utils.grouping(np.where(temp_pred[:, j] >= threshold[i])[0])
+                            for proposal in proposals:
+                                # make sure the proposal to be regions
+                                if len(proposal) >= 2:
+                                    if j not in proposal_dict.keys():
+                                        proposal_dict[j] = []
+                                    inner_score = np.mean(frame_score[proposal, j])
+                                    outer_s = max(0, int(proposal[0] - 0.25 * len(proposal)))
+                                    outer_e = min(len(frame_score) - 1, int(proposal[-1] + 0.25 * len(proposal)))
+                                    outer_list = list(range(outer_s, proposal[0])) + \
+                                                 list(range(proposal[-1] + 1, outer_e + 1))
+                                    if len(outer_list) == 0:
+                                        outer_score = 0
+                                    else:
+                                        outer_score = np.mean(frame_score[outer_list, j])
+                                    score = inner_score - outer_score + 0.2 * act_score[j].item()
+                                    # change frame index to second
+                                    start, end = (proposal[0] + 1) / config.fps, (proposal[-1] + 2) / config.fps
+                                    proposal_dict[j].append([start, end, score])
+            final_proposals = {}
+            # temporal nms
+            for class_id in proposal_dict.keys():
+                proposals = temporal_nms(np.array(proposal_dict[class_id]), config.iou_th)
+                final_proposals[class_id] = proposals.tolist()
+            results['results'][video_name] = utils.result2json(final_proposals, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total
 
@@ -76,9 +115,9 @@ def test_loop(network, config, data_loader, step):
                                                                             m_ap_avg * 100)
         metric_info['Test ACC'] = round(test_acc * 100, 1)
         metric_info['mAP@AVG'] = round(m_ap_avg * 100, 1)
-        for i in range(config.map_th.shape[0]):
-            desc += ' mAP@{:.2f}: {:.1f}'.format(config.map_th[i], m_ap[i] * 100)
-            metric_info['mAP@{:.2f}'.format(config.map_th[i])] = round(m_ap[i] * 100, 1)
+        for j in range(config.map_th.shape[0]):
+            desc += ' mAP@{:.2f}: {:.1f}'.format(config.map_th[j], m_ap[j] * 100)
+            metric_info['mAP@{:.2f}'.format(config.map_th[j])] = round(m_ap[j] * 100, 1)
         print(desc)
         return metric_info
 

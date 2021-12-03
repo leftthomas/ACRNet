@@ -18,6 +18,11 @@ def parse_args():
     parse.add_argument('--data_name', type=str, default='thumos14',
                        choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
     parse.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
+    parse.add_argument('--iou_th', type=float, default=0.6, help='threshold for NMS IoU')
+    parse.add_argument('--seg_th', type=str, default='np.arange(0.0, 0.25, 0.025)',
+                       help='threshold for candidate segments')
+    parse.add_argument('--mag_th', type=str, default='np.arange(0.4, 0.625, 0.025)',
+                       help='threshold for candidate actions')
     parse.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
     parse.add_argument('--select_ratio', type=float, default=0.1,
                        help='selected top/bottom k segments for action/background')
@@ -41,6 +46,9 @@ class Config(object):
         self.save_path = arg.save_path
         self.data_name = arg.data_name
         self.act_th = arg.act_th
+        self.iou_th = arg.iou_th
+        self.seg_th = eval(arg.seg_th)
+        self.mag_th = eval(arg.mag_th)
         self.map_th = arg.map_th
         self.num_seg = arg.num_seg
         self.select_ratio = arg.select_ratio

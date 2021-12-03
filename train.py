@@ -26,16 +26,9 @@ def train_loop(network, data_loader, train_optimizer, n_iter):
     act_loss = bce_criterion(act_score, act_label)
     bkg_loss = bce_criterion(bkg_score, bkg_label)
     # compute norm loss
-    min_act_norm, max_act_norm = torch.aminmax(act_norm, dim=-1, keepdim=True)
-    min_bkg_norm, max_bkg_norm = torch.aminmax(bkg_norm, dim=-1, keepdim=True)
-    min_norm = torch.where(torch.lt(min_act_norm, min_bkg_norm), min_act_norm, min_bkg_norm)
-    max_norm = torch.where(torch.gt(max_act_norm, max_bkg_norm), max_act_norm, max_bkg_norm)
-    # avoid div by zero
-    max_norm = torch.where(torch.eq(max_norm, 0.0), torch.ones_like(max_norm), max_norm)
-
-    act_norm = (act_norm - min_norm.detach()) / max_norm.detach()
-    bkg_norm = (bkg_norm - min_norm.detach()) / max_norm.detach()
-    norm_loss = torch.mean((1.0 - act_norm + bkg_norm) ** 2)
+    loss_act = torch.relu(100.0 - torch.mean(act_norm, dim=-1))
+    loss_bkg = torch.mean(bkg_norm, dim=-1)
+    norm_loss = torch.mean((loss_act + loss_bkg) ** 2)
 
     loss = act_loss + bkg_loss + args.alpha * norm_loss
     loss.backward()
@@ -52,7 +45,7 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False)
 
     net = Model(len(train_data.class_to_idx), args.select_ratio, args.temperature).cuda()
-    optimizer = Adam(net.parameters())
+    optimizer = Adam(net.parameters(), lr=1e-4, weight_decay=5e-4)
 
     best_mAP, metric_info, bce_criterion = 0, {}, nn.BCELoss()
     train_bar = tqdm(range(1, args.num_iter + 1), total=args.num_iter, initial=1, dynamic_ncols=True)
