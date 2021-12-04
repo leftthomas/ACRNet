@@ -33,27 +33,13 @@ def test_loop(network, config, data_loader, step):
             num_correct += 1 if torch.equal(label, pred.float()) else 0
             num_total += 1
 
-            def minmax_norm(act_map, min_val=None, max_val=None):
-                if min_val is None or max_val is None:
-                    min_val, max_val = torch.aminmax(act_map, dim=0, keepdim=True)
-                    min_val, max_val = torch.relu(min_val), torch.relu(max_val)
-
-                delta = max_val - min_val
-                delta[delta <= 0] = 1
-                ret = (act_map - min_val) / delta
-
-                ret[ret > 1] = 1
-                ret[ret < 0] = 0
-
-                return ret
-
             # combine norm and score to obtain final score
             seg_norm = torch.norm(feat, p=2, dim=-1, keepdim=True)
             min_norm = bkg_norm.mean(dim=-1, keepdim=True).unsqueeze(dim=-1)
             max_norm = act_norm.mean(dim=-1, keepdim=True).unsqueeze(dim=-1)
 
-            seg_norm = minmax_norm(seg_norm, min_norm, max_norm)
-            seg_score = minmax_norm(seg_norm * seg_score)
+            seg_norm = utils.minmax_norm(seg_norm, min_norm, max_norm)
+            seg_score = utils.minmax_norm(seg_norm * seg_score)
 
             frame_score = utils.revert_frame(seg_score.cpu().numpy(), config.rate * num_seg)
             # make sure the score between [0, 1]
@@ -126,7 +112,7 @@ if __name__ == '__main__':
     args = utils.parse_args()
     dataset = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(dataset, batch_size=1, shuffle=False)
-    net = Model(len(dataset.class_to_idx), args.select_ratio, args.temperature)
+    net = Model(len(dataset.class_to_idx), args.select_ratio)
 
     test_info = test_loop(net, args, test_loader, 0)
     with open(os.path.join(args.save_path, '{}_record.json'.format(args.data_name)), 'w') as f:

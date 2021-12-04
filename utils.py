@@ -26,8 +26,6 @@ def parse_args():
     parse.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
     parse.add_argument('--select_ratio', type=float, default=0.1,
                        help='selected top/bottom k segments for action/background')
-    parse.add_argument('--temperature', type=float, default=0.05,
-                       help='used temperature scale for softmax')
     parse.add_argument('--alpha', type=float, default=0.0005)
     parse.add_argument('--fps', type=int, default=25)
     parse.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
@@ -52,7 +50,6 @@ class Config(object):
         self.map_th = arg.map_th
         self.num_seg = arg.num_seg
         self.select_ratio = arg.select_ratio
-        self.temperature = arg.temperature
         self.alpha = arg.alpha
         self.fps = arg.fps
         self.rate = arg.rate
@@ -89,6 +86,17 @@ def revert_frame(scores, num_frame):
 # split frames to action regions
 def grouping(frames):
     return np.split(frames, np.where(np.diff(frames) != 1)[0] + 1)
+
+
+# rescale value to [0, 1]
+def minmax_norm(value, min_val=None, max_val=None):
+    if min_val is None or max_val is None:
+        min_val, max_val = torch.aminmax(value, dim=0, keepdim=True)
+
+    delta = max_val - min_val
+    delta = torch.where(delta <= 0.0, torch.ones_like(delta), delta)
+    ret = torch.clamp((value - min_val) / delta, min=0.0, max=1.0)
+    return ret
 
 
 def result2json(result, class_dict):

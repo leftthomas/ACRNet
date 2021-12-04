@@ -6,11 +6,10 @@ import torch.nn.functional as F
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, select_ratio, temperature, feat_dim=2048):
+    def __init__(self, num_classes, select_ratio, feat_dim=2048):
         super(Model, self).__init__()
 
         self.select_ratio = select_ratio
-        self.temperature = temperature
         self.conv = nn.Sequential(nn.Conv1d(feat_dim, feat_dim, kernel_size=3, padding=1), nn.ReLU(inplace=True))
         self.proxy = nn.Parameter(torch.empty(num_classes, feat_dim, 1))
         # introduce dropout for robust, eliminate the noise
