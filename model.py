@@ -41,27 +41,3 @@ class Model(nn.Module):
         # [N, T, C]
         seg_score = torch.softmax(seg_score, dim=-1)
         return act_norm, bkg_norm, feat, act_score, bkg_score, seg_score
-
-# if __name__ == '__main__':
-#     import glob
-#     import seaborn as sns
-#     import matplotlib.pyplot as plt
-#     import pandas as pd
-#     from tqdm import tqdm
-#
-#     sns.set()
-#
-#     thumos_features = sorted(glob.glob('/data/thumos14/features/test/*_rgb.npy'))
-#     activitynet_features = sorted(glob.glob('/data/activitynet/features/training/*_rgb.npy'))
-#     thumos_frames, activitynet_frames = [], []
-#     for feature in tqdm(thumos_features):
-#         thumos_frames.append(len(np.load(feature)))
-#     for feature in tqdm(activitynet_features):
-#         activitynet_frames.append(len(np.load(feature)))
-#
-#     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-#     axes[0].set_title('thumos14', fontsize=18)
-#     axes[1].set_title('activitynet', fontsize=18)
-#     sns.histplot(pd.DataFrame({'count': thumos_frames}), ax=axes[0])
-#     sns.histplot(pd.DataFrame({'count': activitynet_frames}), ax=axes[1])
-#     plt.savefig('result/dist.pdf', bbox_inches='tight', pad_inches=0.1)

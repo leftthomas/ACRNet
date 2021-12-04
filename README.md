@@ -31,9 +31,8 @@ compile [denseFlow_GPU](https://github.com/daveboat/denseFlow_GPU), put the exec
 could be found in `dataset.py`, this script will take a lot of time to extract the features. Finally, I3D features of
 these datasets are extracted by [this repo](https://github.com/Finspire13/pytorch-i3d-feature-extraction), the
 `extract_features.py` file should be replaced with `extract.py`, the options could be found in `extract.py`. To make
-this research friendly, we uploaded these I3D features
-in [GoogleDrive](https://drive.google.com/drive/folders/1wudi03iJQYZ3qN2RUHB5senFrbFrWUQw?usp=sharing). You could
-download them from there, and make sure the data directory structure is organized as follows:
+this research friendly, we uploaded these I3D features in [MEGA](https://mega.nz/folder/6sFxjaZB#Jtx69Kb2RHu2ldXoNzsODQ)
+. You could download them from there, and make sure the data directory structure is organized as follows:
 
  ```
 ├── thumos14                                    |  ├── activitynet
