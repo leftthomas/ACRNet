@@ -1,9 +1,14 @@
+import argparse
+import glob
 import json
 import os
+import subprocess
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+
+from utils import which_ffmpeg
 
 
 class VideoDataset(Dataset):
@@ -41,8 +46,8 @@ class VideoDataset(Dataset):
 
     def __getitem__(self, index):
         rgb, flow = np.load(self.rgb[index]), np.load(self.flow[index])
-        video_name, num_seg = os.path.basename(self.rgb[index]).split('.')[0][: -4], rgb.shape[0]
-        annotation = self.annotations['d_{}'.format(video_name)]
+        video_key, num_seg = os.path.basename(self.rgb[index]).split('.')[0][: -4], rgb.shape[0]
+        annotation = self.annotations['d_{}'.format(video_key)]
         sample_idx = self.random_sampling(num_seg) if self.data_type == 'train' else self.uniform_sampling(num_seg)
         rgb, flow = torch.from_numpy(rgb[sample_idx]), torch.from_numpy(flow[sample_idx])
 
@@ -53,7 +58,7 @@ class VideoDataset(Dataset):
         if self.data_type == 'train':
             return feat, label
         else:
-            return feat, label, video_name, num_seg
+            return feat, label, video_key, num_seg
 
     def random_sampling(self, num_seg):
         sample_idx = np.append(np.arange(self.num_seg) * num_seg / self.num_seg, num_seg)
@@ -71,44 +76,33 @@ class VideoDataset(Dataset):
         else:
             return np.floor(np.arange(self.num_seg) * num_seg / self.num_seg).astype(np.int)
 
-# if __name__ == '__main__':
-#     from mmaction.core.evaluation import ActivityNetLocalization
-#
-#     data_name, label_name, data_type = 'thumos14', 'annotations.json', 'test'
-#     map_th = np.linspace(0.1, 0.7, 7) if data_name == 'thumos14' else np.linspace(0.5, 0.95, 10)
-#
-#     with open(os.path.join('/data', data_name, label_name), 'r') as f:
-#         annotations = json.load(f)
-#     gt, pred = {}, {'results': {}}
-#     count = 0
-#     for key, value in annotations.items():
-#         if value['subset'] == data_type:
-#             gt['d_{}'.format(key)] = {'annotations': value['annotations']}
-#             result_file = []
-#             rgb = np.load('/data/{}/features/{}/{}_rgb.npy'.format(data_name, data_type, key))
-#             end = (rgb.shape[0] * 16 + 1) / 25
-#             for result in value['annotations']:
-#                 if result['segment'][0] >= end:
-#                     if result['segment'][0] >= end + 0.64:
-#                         count += 1
-#                     continue
-#                 else:
-#                     if result['segment'][1] > end:
-#                         result['segment'][1] = end
-#                         count += 1
-#                     result_file.append({'label': result['label'], 'score': 1.0,
-#                                         'segment': result['segment']})
-#             pred['results'][key] = result_file
-#
-#     gt_path = os.path.join('result', '{}_fake_gt.json'.format(data_name))
-#     with open(gt_path, 'w') as json_file:
-#         json.dump(gt, json_file, indent=4)
-#     pred_path = os.path.join('result', '{}_fake_pred.json'.format(data_name))
-#     with open(pred_path, 'w') as json_file:
-#         json.dump(pred, json_file, indent=4)
-#
-#     evaluator_atl = ActivityNetLocalization(gt_path, pred_path, tiou_thresholds=map_th, verbose=False)
-#     m_ap, m_ap_avg = evaluator_atl.evaluate()
-#     print(m_ap_avg)
-#     print(m_ap)
-#     print(count)
+
+if __name__ == '__main__':
+    description = 'Extract the RGB and Flow features from videos with assigned fps'
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument('--data_root', type=str, default='/data')
+    parser.add_argument('--save_path', type=str, default='result')
+    parser.add_argument('--dataset', type=str, default='thumos14', choices=['thumos14', 'activitynet'])
+    parser.add_argument('--fps', type=int, default=25)
+    parser.add_argument('--data_split', type=str, required=True)
+    args = parser.parse_args()
+
+    data_root, save_path, dataset, data_split = args.data_root, args.save_path, args.dataset, args.data_split
+    fps, ffmpeg_path = args.fps, which_ffmpeg()
+    videos = sorted(glob.glob('{}/{}/videos/{}/*'.format(data_root, dataset, data_split)))
+    total = len(videos)
+
+    for j, video_path in enumerate(videos):
+        dir_name, video_name = os.path.dirname(video_path).split('/')[-1], os.path.basename(video_path).split('.')[0]
+        save_root = '{}/{}/{}/{}'.format(save_path, dataset, dir_name, video_name)
+        # pass the already precessed videos
+        try:
+            os.makedirs(save_root)
+        except OSError:
+            continue
+        print('[{}/{}] Saving {} to {}/{}.mp4 with {} fps'.format(j + 1, total, video_path, save_root, video_name, fps))
+        ffmpeg_cmd = '{} -hide_banner -loglevel panic -i {} -r {} -y {}/{}.mp4' \
+            .format(ffmpeg_path, video_path, fps, save_root, video_name)
+        subprocess.call(ffmpeg_cmd.split())
+        flow_cmd = './denseFlow_gpu -f={}/{}.mp4 -o={}'.format(save_root, video_name, save_root)
+        subprocess.call(flow_cmd.split())

@@ -25,10 +25,10 @@ mim install mmaction2
 
 [THUMOS 14](http://crcv.ucf.edu/THUMOS14/download.html) and [ActivityNet](http://activity-net.org/download.html)
 datasets are used in this repo, you should download these datasets from official websites. The RGB and Flow features of
-these datasets are extracted by `utils.py` with `25FPS`. You should follow
+these datasets are extracted by `dataset.py` with `25FPS`. You should follow
 [this link](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7) to install OpenCV4 with CUDA. And then
 compile [denseFlow_GPU](https://github.com/daveboat/denseFlow_GPU), put the executable program in this dir. The options
-could be found in `utils.py`, this script will take a lot of time to extract the features. Finally, I3D features of
+could be found in `dataset.py`, this script will take a lot of time to extract the features. Finally, I3D features of
 these datasets are extracted by [this repo](https://github.com/Finspire13/pytorch-i3d-feature-extraction), the
 `extract_features.py` file should be replaced with `extract.py`, the options could be found in `extract.py`. To make
 this research friendly, we uploaded these I3D features

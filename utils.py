@@ -1,5 +1,4 @@
 import argparse
-import glob
 import os
 import random
 import subprocess
@@ -12,30 +11,30 @@ from torch.backends import cudnn
 
 def parse_args():
     desc = 'Pytorch Implementation of \'Mining Relations for Weakly-Supervised Action Localization\''
-    parse = argparse.ArgumentParser(description=desc)
-    parse.add_argument('--data_path', type=str, default='/data')
-    parse.add_argument('--save_path', type=str, default='result')
-    parse.add_argument('--data_name', type=str, default='thumos14',
-                       choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
-    parse.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
-    parse.add_argument('--iou_th', type=float, default=0.6, help='threshold for NMS IoU')
-    parse.add_argument('--seg_th', type=str, default='np.arange(0.0, 0.25, 0.025)',
-                       help='threshold for candidate segments')
-    parse.add_argument('--mag_th', type=str, default='np.arange(0.4, 0.625, 0.025)',
-                       help='threshold for candidate actions')
-    parse.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
-    parse.add_argument('--select_ratio', type=float, default=0.1,
-                       help='selected top/bottom k segments for action/background')
-    parse.add_argument('--alpha', type=float, default=0.0005)
-    parse.add_argument('--fps', type=int, default=25)
-    parse.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
-    parse.add_argument('--num_iter', type=int, default=10000)
-    parse.add_argument('--eval_iter', type=int, default=100)
-    parse.add_argument('--batch_size', type=int, default=16)
-    parse.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
-    parse.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('--data_path', type=str, default='/data')
+    parser.add_argument('--save_path', type=str, default='result')
+    parser.add_argument('--data_name', type=str, default='thumos14',
+                        choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
+    parser.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
+    parser.add_argument('--iou_th', type=float, default=0.6, help='threshold for NMS IoU')
+    parser.add_argument('--score_th', type=str, default='np.arange(0.0, 0.25, 0.025)',
+                        help='threshold for candidate frames with scores')
+    parser.add_argument('--norm_th', type=str, default='np.arange(0.4, 0.625, 0.025)',
+                        help='threshold for candidate frames with norms')
+    parser.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
+    parser.add_argument('--ratio', type=float, default=0.1,
+                        help='selected top/bottom k segments for action/background')
+    parser.add_argument('--alpha', type=float, default=0.0005)
+    parser.add_argument('--fps', type=int, default=25)
+    parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
+    parser.add_argument('--num_iter', type=int, default=10000)
+    parser.add_argument('--eval_iter', type=int, default=100)
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
+    parser.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
 
-    return init_args(parse.parse_args())
+    return init_args(parser.parse_args())
 
 
 class Config(object):
@@ -45,11 +44,11 @@ class Config(object):
         self.data_name = arg.data_name
         self.act_th = arg.act_th
         self.iou_th = arg.iou_th
-        self.seg_th = eval(arg.seg_th)
-        self.mag_th = eval(arg.mag_th)
+        self.score_th = eval(arg.score_th)
+        self.norm_th = eval(arg.norm_th)
         self.map_th = arg.map_th
         self.num_seg = arg.num_seg
-        self.select_ratio = arg.select_ratio
+        self.ratio = arg.ratio
         self.alpha = arg.alpha
         self.fps = arg.fps
         self.rate = arg.rate
@@ -108,37 +107,62 @@ def result2json(result, class_dict):
     return result_file
 
 
+# according OIC loss
+def form_region(proposal, frame_score, act_score, fps, inflation=0.25, gamma=0.25):
+    inner_score = np.mean(frame_score[proposal])
+    outer_s = max(0, int(proposal[0] - inflation * len(proposal)))
+    outer_e = min(len(frame_score) - 1, int(proposal[-1] + inflation * len(proposal)))
+    outer_list = list(range(outer_s, proposal[0])) + list(range(proposal[-1] + 1, outer_e + 1))
+    outer_score = 0.0 if len(outer_list) == 0 else np.mean(frame_score[outer_list])
+
+    score = inner_score - outer_score + gamma * act_score
+    # change frame index to second
+    start, end = (proposal[0] + 1) / fps, (proposal[-1] + 2) / fps
+    return [start, end, score]
+
+
 def which_ffmpeg():
     result = subprocess.run(['which', 'ffmpeg'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return result.stdout.decode('utf-8').replace('\n', '')
 
-
-if __name__ == '__main__':
-    description = 'Extract the RGB and Flow features from videos with assigned fps'
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument('--data_path', type=str, default='/data')
-    parser.add_argument('--save_path', type=str, default='result')
-    parser.add_argument('--data_name', type=str, default='thumos14', choices=['thumos14', 'activitynet'])
-    parser.add_argument('--fps', type=int, default=25)
-    parser.add_argument('--data_split', type=str, required=True)
-    args = parser.parse_args()
-
-    data_path, save_path, data_name, data_split = args.data_path, args.save_path, args.data_name, args.data_split
-    fps, ffmpeg_path = args.fps, which_ffmpeg()
-    videos = sorted(glob.glob('{}/{}/videos/{}/*'.format(data_path, data_name, data_split)))
-    total = len(videos)
-
-    for i, video_path in enumerate(videos):
-        dir_name, video_name = os.path.dirname(video_path).split('/')[-1], os.path.basename(video_path).split('.')[0]
-        save_root = '{}/{}/{}/{}'.format(save_path, data_name, dir_name, video_name)
-        # pass the already precessed videos
-        try:
-            os.makedirs(save_root)
-        except OSError:
-            continue
-        print('[{}/{}] Saving {} to {}/{}.mp4 with {} fps'.format(i + 1, total, video_path, save_root, video_name, fps))
-        ffmpeg_cmd = '{} -hide_banner -loglevel panic -i {} -r {} -y {}/{}.mp4' \
-            .format(ffmpeg_path, video_path, fps, save_root, video_name)
-        subprocess.call(ffmpeg_cmd.split())
-        flow_cmd = './denseFlow_gpu -f={}/{}.mp4 -o={}'.format(save_root, video_name, save_root)
-        subprocess.call(flow_cmd.split())
+# if __name__ == '__main__':
+#     from mmaction.core.evaluation import ActivityNetLocalization
+#
+#     data_name, label_name, data_type = 'thumos14', 'annotations.json', 'test'
+#     map_th = np.linspace(0.1, 0.7, 7) if data_name == 'thumos14' else np.linspace(0.5, 0.95, 10)
+#
+#     with open(os.path.join('/data', data_name, label_name), 'r') as f:
+#         annotations = json.load(f)
+#     gt, pred = {}, {'results': {}}
+#     count = 0
+#     for key, value in annotations.items():
+#         if value['subset'] == data_type:
+#             gt['d_{}'.format(key)] = {'annotations': value['annotations']}
+#             result_file = []
+#             rgb = np.load('/data/{}/features/{}/{}_rgb.npy'.format(data_name, data_type, key))
+#             end = (rgb.shape[0] * 16 + 1) / 25
+#             for result in value['annotations']:
+#                 if result['segment'][0] >= end:
+#                     if result['segment'][0] >= end + 0.64:
+#                         count += 1
+#                     continue
+#                 else:
+#                     if result['segment'][1] > end:
+#                         result['segment'][1] = end
+#                         count += 1
+#                     result_file.append({'label': result['label'], 'score': 1.0,
+#                                         'segment': result['segment']})
+#             pred['results'][key] = result_file
+#
+#     gt_path = os.path.join('result', '{}_fake_gt.json'.format(data_name))
+#     with open(gt_path, 'w') as json_file:
+#         json.dump(gt, json_file, indent=4)
+#     pred_path = os.path.join('result', '{}_fake_pred.json'.format(data_name))
+#     with open(pred_path, 'w') as json_file:
+#         json.dump(pred, json_file, indent=4)
+#
+#     evaluator_atl = ActivityNetLocalization(gt_path, pred_path, tiou_thresholds=map_th, verbose=False)
+#     m_ap, m_ap_avg = evaluator_atl.evaluate()
+#     print(m_ap_avg)
+#     print(m_ap)
+#     print(count)
