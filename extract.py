@@ -54,15 +54,6 @@ def run(mode='rgb', load_model='', frequency=16, chunk_size=16, input_dir='', ou
     # set model to evaluate mode
     i3d.eval()
 
-    def forward_batch(b_data):
-        b_data = b_data.transpose([0, 4, 1, 2, 3])
-        # [b, c, t, h, w]
-        b_data = torch.from_numpy(b_data).cuda()
-        with torch.no_grad():
-            b_features = i3d.extract_features(b_data)
-            b_features = torch.flatten(b_features.cpu(), start_dim=1).numpy()
-        return b_features
-
     video_names = [i for i in os.listdir(input_dir)]
     for pro_i, video_name in enumerate(video_names):
         save_file = '{}_{}.npy'.format(video_name, mode)
@@ -104,7 +95,12 @@ def run(mode='rgb', load_model='', frequency=16, chunk_size=16, input_dir='', ou
                 batch_data = load_rgb_batch(frames_dir, rgb_files, frame_indices[batch_id])
             else:
                 batch_data = load_flow_batch(frames_dir, flow_x_files, flow_y_files, frame_indices[batch_id])
-            full_features.append(forward_batch(batch_data))
+            with torch.no_grad():
+                # [b, c, t, h, w]
+                batch_data = torch.from_numpy(batch_data.transpose([0, 4, 1, 2, 3])).cuda()
+                batch_feature = i3d.extract_features(batch_data)
+                batch_feature = torch.flatten(batch_feature, start_dim=1).cpu().numpy()
+            full_features.append(batch_feature)
 
         full_features = np.concatenate(full_features, axis=0)
         np.save(os.path.join(output_dir, save_file), full_features)
