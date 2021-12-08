@@ -12,7 +12,7 @@ from torch.backends import cudnn
 def parse_args():
     desc = 'Pytorch Implementation of \'Mining Relations for Weakly-Supervised Action Localization\''
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('--data_path', type=str, default='/data')
+    parser.add_argument('--data_path', type=str, default='/home/data')
     parser.add_argument('--save_path', type=str, default='result')
     parser.add_argument('--data_name', type=str, default='thumos14',
                         choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])

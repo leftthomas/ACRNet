@@ -80,7 +80,7 @@ class VideoDataset(Dataset):
 if __name__ == '__main__':
     description = 'Extract the RGB and Flow features from videos with assigned fps'
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument('--data_root', type=str, default='/data')
+    parser.add_argument('--data_root', type=str, default='/home/data')
     parser.add_argument('--save_path', type=str, default='result')
     parser.add_argument('--dataset', type=str, default='thumos14', choices=['thumos14', 'activitynet'])
     parser.add_argument('--fps', type=int, default=25)
