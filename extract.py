@@ -73,39 +73,39 @@ def run(mode='rgb', load_model='', frequency=16, chunk_size=16, input_dir='', ou
             assert (len(flow_y_files) == len(flow_x_files))
             frame_cnt = len(flow_y_files)
 
-        if frame_cnt > chunk_size:
-            # cut frames
-            clipped_length = frame_cnt - chunk_size
-            # the start of last chunk
-            clipped_length = (clipped_length // frequency) * frequency
-            # frames to chunks
-            frame_indices = []
-            for i in range(clipped_length // frequency + 1):
-                frame_indices.append([j for j in range(i * frequency, i * frequency + chunk_size)])
-            frame_indices = np.array(frame_indices)
+        # cut frames
+        assert (frame_cnt > chunk_size)
+        clipped_length = frame_cnt - chunk_size
+        # the start of last chunk
+        clipped_length = (clipped_length // frequency) * frequency
+        # frames to chunks
+        frame_indices = []
+        for i in range(clipped_length // frequency + 1):
+            frame_indices.append([j for j in range(i * frequency, i * frequency + chunk_size)])
+        frame_indices = np.array(frame_indices)
 
-            chunk_num = frame_indices.shape[0]
-            # chunks to batches
-            batch_num = int(np.ceil(chunk_num / batch_size))
-            frame_indices = np.array_split(frame_indices, batch_num, axis=0)
+        chunk_num = frame_indices.shape[0]
+        # chunks to batches
+        batch_num = int(np.ceil(chunk_num / batch_size))
+        frame_indices = np.array_split(frame_indices, batch_num, axis=0)
 
-            full_features = []
-            for batch_id in range(batch_num):
-                if mode == 'rgb':
-                    batch_data = load_rgb_batch(frames_dir, rgb_files, frame_indices[batch_id])
-                else:
-                    batch_data = load_flow_batch(frames_dir, flow_x_files, flow_y_files, frame_indices[batch_id])
-                with torch.no_grad():
-                    # [b, c, t, h, w]
-                    batch_data = torch.from_numpy(batch_data.transpose([0, 4, 1, 2, 3])).cuda()
-                    batch_feature = i3d.extract_features(batch_data)
-                    batch_feature = torch.flatten(batch_feature, start_dim=1).cpu().numpy()
-                full_features.append(batch_feature)
+        full_features = []
+        for batch_id in range(batch_num):
+            if mode == 'rgb':
+                batch_data = load_rgb_batch(frames_dir, rgb_files, frame_indices[batch_id])
+            else:
+                batch_data = load_flow_batch(frames_dir, flow_x_files, flow_y_files, frame_indices[batch_id])
+            with torch.no_grad():
+                # [b, c, t, h, w]
+                batch_data = torch.from_numpy(batch_data.transpose([0, 4, 1, 2, 3])).cuda()
+                batch_feature = i3d.extract_features(batch_data)
+                batch_feature = torch.flatten(batch_feature, start_dim=1).cpu().numpy()
+            full_features.append(batch_feature)
 
-            full_features = np.concatenate(full_features, axis=0)
-            np.save(os.path.join(output_dir, save_file), full_features)
-            print('[{}/{}] {} done: {} / {}, {}'.format(pro_i + 1, len(video_names), video_name, frame_cnt,
-                                                        clipped_length, full_features.shape))
+        full_features = np.concatenate(full_features, axis=0)
+        np.save(os.path.join(output_dir, save_file), full_features)
+        print('[{}/{}] {} done: {} / {}, {}'.format(pro_i + 1, len(video_names), video_name, frame_cnt,
+                                                    clipped_length, full_features.shape))
 
 
 if __name__ == '__main__':
