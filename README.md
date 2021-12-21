@@ -11,14 +11,14 @@ A PyTorch implementation of RelationNet based on ICME 2022 paper
 - [PyTorch](https://pytorch.org)
 
 ```
-conda install pytorch=1.10.0 torchvision cudatoolkit=11.3 -c pytorch
+conda install pytorch=1.10.1 torchvision cudatoolkit=11.3 -c pytorch
 ```
 
 - [MMAction2](https://mmaction2.readthedocs.io)
 
 ```
 pip install git+https://github.com/open-mmlab/mim.git
-mim install mmaction2
+mim install mmaction2 -f https://github.com/open-mmlab/mmaction2.git
 ```
 
 ## Dataset
