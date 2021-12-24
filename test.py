@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from dataset import VideoDataset
 from model import Model
-from utils import minmax_norm, revert_frame, grouping, form_region, result2json, parse_args
+from utils import revert_frame, grouping, result2json, parse_args
 
 
 def test_loop(network, config, data_loader, step):
@@ -24,19 +24,14 @@ def test_loop(network, config, data_loader, step):
         results, num_correct, num_total = {'results': {}}, 0, 0
         for feat, label, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             feat, label, video_name, num_seg = feat.cuda(), label.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_norm, bkg_norm, feat, act_score, bkg_score, seg_score = network(feat)
-            # [T, D],  [C],  [T, C]
-            feat, act_score, seg_score = feat.squeeze(0), act_score.squeeze(0), seg_score.squeeze(0)
+            act_score, _, seg_score = network(feat)
+            # [C],  [T, C]
+            act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
 
             pred = torch.ge(act_score, config.act_th)
             num_correct += 1 if torch.equal(label, pred.float()) else 0
             num_total += 1
 
-            # combine norm and score to obtain final score
-            seg_norm = torch.norm(feat, p=2, dim=-1, keepdim=True)
-            seg_norm = minmax_norm(seg_norm, bkg_norm, act_norm)
-
-            seg_score = minmax_norm(seg_norm * seg_score)
             frame_score = revert_frame(seg_score.cpu().numpy(), config.rate * num_seg.item())
             # make sure the score between [0, 1]
             frame_score = np.clip(frame_score, a_min=0.0, a_max=1.0)
@@ -52,8 +47,10 @@ def test_loop(network, config, data_loader, step):
                             if len(proposal) >= 2:
                                 if i not in proposal_dict.keys():
                                     proposal_dict[i] = []
-                                region = form_region(proposal, frame_score[:, i], act_score[i].item(), config.fps)
-                                proposal_dict[i].append(region)
+                                score = np.mean(frame_score[proposal])
+                                # change frame index to second
+                                start, end = (proposal[0] + 1) / config.fps, (proposal[-1] + 2) / config.fps
+                                proposal_dict[i].append([start, end, score])
                     # temporal nms
                     proposal_dict[i] = temporal_nms(np.array(proposal_dict[i]), config.iou_th).tolist()
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)

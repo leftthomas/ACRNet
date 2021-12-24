@@ -23,7 +23,6 @@ def parse_args():
     parser.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
     parser.add_argument('--ratio', type=float, default=0.1,
                         help='selected top/bottom k segments for action/background')
-    parser.add_argument('--alpha', type=float, default=0.0005)
     parser.add_argument('--fps', type=int, default=25)
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
     parser.add_argument('--num_iter', type=int, default=10000)
@@ -36,39 +35,38 @@ def parse_args():
 
 
 class Config(object):
-    def __init__(self, arg):
-        self.data_path = arg.data_path
-        self.save_path = arg.save_path
-        self.data_name = arg.data_name
-        self.act_th = arg.act_th
-        self.iou_th = arg.iou_th
-        self.score_th = eval(arg.score_th)
-        self.map_th = arg.map_th
-        self.num_seg = arg.num_seg
-        self.ratio = arg.ratio
-        self.alpha = arg.alpha
-        self.fps = arg.fps
-        self.rate = arg.rate
-        self.num_iter = arg.num_iter
-        self.eval_iter = arg.eval_iter
-        self.batch_size = arg.batch_size
-        self.model_file = arg.model_file
+    def __init__(self, args):
+        self.data_path = args.data_path
+        self.save_path = args.save_path
+        self.data_name = args.data_name
+        self.act_th = args.act_th
+        self.iou_th = args.iou_th
+        self.score_th = eval(args.score_th)
+        self.map_th = args.map_th
+        self.num_seg = args.num_seg
+        self.ratio = args.ratio
+        self.fps = args.fps
+        self.rate = args.rate
+        self.num_iter = args.num_iter
+        self.eval_iter = args.eval_iter
+        self.batch_size = args.batch_size
+        self.model_file = args.model_file
 
 
-def init_args(arg):
-    if not os.path.exists(arg.save_path):
-        os.makedirs(arg.save_path)
+def init_args(args):
+    if not os.path.exists(args.save_path):
+        os.makedirs(args.save_path)
 
-    if arg.seed >= 0:
-        random.seed(arg.seed)
-        np.random.seed(arg.seed)
-        torch.manual_seed(arg.seed)
-        torch.cuda.manual_seed_all(arg.seed)
+    if args.seed >= 0:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
         cudnn.deterministic = True
         cudnn.benchmark = False
 
-    arg.map_th = np.linspace(0.1, 0.7, 7) if arg.data_name == 'thumos14' else np.linspace(0.5, 0.95, 10)
-    return Config(arg)
+    args.map_th = np.linspace(0.1, 0.7, 7) if args.data_name == 'thumos14' else np.linspace(0.5, 0.95, 10)
+    return Config(args)
 
 
 # change the segment based scores to frame based scores
@@ -84,17 +82,6 @@ def grouping(frames):
     return np.split(frames, np.where(np.diff(frames) != 1)[0] + 1)
 
 
-# rescale value to [0, 1]
-def minmax_norm(value, min_val=None, max_val=None):
-    if min_val is None or max_val is None:
-        min_val, max_val = torch.aminmax(value, dim=0, keepdim=True)
-
-    delta = max_val - min_val
-    delta = torch.where(delta <= 0.0, torch.ones_like(delta), delta)
-    ret = torch.clamp((value - min_val) / delta, min=0.0, max=1.0)
-    return ret
-
-
 def result2json(result, class_dict):
     result_file = []
     for key, value in result.items():
@@ -102,20 +89,6 @@ def result2json(result, class_dict):
             result_file.append({'label': class_dict[key], 'score': float(line[-1]),
                                 'segment': [float(line[0]), float(line[1])]})
     return result_file
-
-
-# according OIC loss
-def form_region(proposal, frame_score, act_score, fps, inflation=0.25, gamma=0.25):
-    inner_score = np.mean(frame_score[proposal])
-    outer_s = max(0, int(proposal[0] - inflation * len(proposal)))
-    outer_e = min(len(frame_score) - 1, int(proposal[-1] + inflation * len(proposal)))
-    outer_list = list(range(outer_s, proposal[0])) + list(range(proposal[-1] + 1, outer_e + 1))
-    outer_score = 0.0 if len(outer_list) == 0 else np.mean(frame_score[outer_list])
-
-    score = inner_score - outer_score + gamma * act_score
-    # change frame index to second
-    start, end = (proposal[0] + 1) / fps, (proposal[-1] + 2) / fps
-    return [start, end, score]
 
 
 def which_ffmpeg():

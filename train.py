@@ -17,20 +17,15 @@ def train_loop(network, data_loader, train_optimizer, n_iter):
     network.train()
     data, label = next(data_loader)
     data, label = data.cuda(), label.cuda()
-    act_label = label / torch.sum(label, dim=-1, keepdim=True)
+    act_label = label
     bkg_label = torch.ones_like(label)
     bkg_label /= torch.sum(bkg_label, dim=-1, keepdim=True)
 
     train_optimizer.zero_grad()
-    act_norm, bkg_norm, _, act_score, bkg_score, _ = network(data)
+    act_score, bkg_score, _ = network(data)
     act_loss = bce_criterion(act_score, act_label)
     bkg_loss = bce_criterion(bkg_score, bkg_label)
-    # compute norm loss
-    loss_act = torch.relu(100.0 - torch.mean(act_norm, dim=-1))
-    loss_bkg = torch.mean(bkg_norm, dim=-1)
-    norm_loss = torch.mean((loss_act + loss_bkg) ** 2)
-
-    loss = act_loss + bkg_loss + args.alpha * norm_loss
+    loss = act_loss + bkg_loss
     loss.backward()
     train_optimizer.step()
 
@@ -45,7 +40,7 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False)
 
     net = Model(len(train_data.class_to_idx), args.ratio).cuda()
-    optimizer = Adam(net.parameters(), lr=1e-4, weight_decay=5e-4)
+    optimizer = Adam(net.parameters())
 
     best_mAP, metric_info, bce_criterion = 0, {}, nn.BCELoss()
     train_bar = tqdm(range(1, args.num_iter + 1), total=args.num_iter, initial=1, dynamic_ncols=True)
