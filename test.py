@@ -35,9 +35,6 @@ def test_loop(network, config, data_loader, step):
             # combine norm and score to obtain final score
             seg_norm = torch.norm(feat, p=2, dim=-1, keepdim=True)
             seg_norm = minmax_norm(seg_norm, bkg_norm, act_norm)
-            frame_norm = revert_frame(seg_norm.cpu().numpy(), config.rate * num_seg.item())
-            # make sure the norm between [0, 1]
-            frame_norm = np.clip(frame_norm, a_min=0.0, a_max=1.0)
 
             seg_score = minmax_norm(seg_norm * seg_score)
             frame_score = revert_frame(seg_score.cpu().numpy(), config.rate * num_seg.item())
@@ -47,17 +44,16 @@ def test_loop(network, config, data_loader, step):
             proposal_dict = {}
             for i, status in enumerate(pred):
                 if status:
-                    for thresholds, scores in zip([config.norm_th, config.score_th], [frame_norm, frame_score]):
-                        # enrich the proposal pool by using multiple thresholds
-                        for threshold in thresholds:
-                            proposals = grouping(np.where(scores[:, i] >= threshold)[0])
-                            # make sure the proposal to be regions
-                            for proposal in proposals:
-                                if len(proposal) >= 2:
-                                    if i not in proposal_dict.keys():
-                                        proposal_dict[i] = []
-                                    region = form_region(proposal, frame_score[:, i], act_score[i].item(), config.fps)
-                                    proposal_dict[i].append(region)
+                    # enrich the proposal pool by using multiple thresholds
+                    for threshold in config.score_th:
+                        proposals = grouping(np.where(frame_score[:, i] >= threshold)[0])
+                        # make sure the proposal to be regions
+                        for proposal in proposals:
+                            if len(proposal) >= 2:
+                                if i not in proposal_dict.keys():
+                                    proposal_dict[i] = []
+                                region = form_region(proposal, frame_score[:, i], act_score[i].item(), config.fps)
+                                proposal_dict[i].append(region)
                     # temporal nms
                     proposal_dict[i] = temporal_nms(np.array(proposal_dict[i]), config.iou_th).tolist()
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)

@@ -20,8 +20,6 @@ def parse_args():
     parser.add_argument('--iou_th', type=float, default=0.6, help='threshold for NMS IoU')
     parser.add_argument('--score_th', type=str, default='np.arange(0.0, 0.25, 0.025)',
                         help='threshold for candidate frames with scores')
-    parser.add_argument('--norm_th', type=str, default='np.arange(0.4, 0.625, 0.025)',
-                        help='threshold for candidate frames with norms')
     parser.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
     parser.add_argument('--ratio', type=float, default=0.1,
                         help='selected top/bottom k segments for action/background')
@@ -45,7 +43,6 @@ class Config(object):
         self.act_th = arg.act_th
         self.iou_th = arg.iou_th
         self.score_th = eval(arg.score_th)
-        self.norm_th = eval(arg.norm_th)
         self.map_th = arg.map_th
         self.num_seg = arg.num_seg
         self.ratio = arg.ratio
