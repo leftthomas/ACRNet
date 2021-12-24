@@ -47,7 +47,7 @@ def test_loop(network, config, data_loader, step):
                             if len(proposal) >= 2:
                                 if i not in proposal_dict.keys():
                                     proposal_dict[i] = []
-                                score = np.mean(frame_score[proposal])
+                                score = np.mean(frame_score[proposal, i])
                                 # change frame index to second
                                 start, end = (proposal[0] + 1) / config.fps, (proposal[-1] + 2) / config.fps
                                 proposal_dict[i].append([start, end, score])
