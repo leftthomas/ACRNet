@@ -39,7 +39,7 @@ if __name__ == '__main__':
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False)
 
-    net = Model(len(train_data.class_to_idx), args.ratio).cuda()
+    net = Model(len(train_data.class_to_idx)).cuda()
     optimizer = Adam(net.parameters())
 
     best_mAP, metric_info, bce_criterion = 0, {}, nn.BCELoss()

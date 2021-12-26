@@ -83,7 +83,7 @@ if __name__ == '__main__':
     args = parse_args()
     dataset = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(dataset, batch_size=1, shuffle=False)
-    net = Model(len(dataset.class_to_idx), args.ratio)
+    net = Model(len(dataset.class_to_idx))
 
     test_info = test_loop(net, args, test_loader, 0)
     with open(os.path.join(args.save_path, '{}_record.json'.format(args.data_name)), 'w') as f:

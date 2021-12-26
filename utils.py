@@ -21,8 +21,6 @@ def parse_args():
     parser.add_argument('--score_th', type=str, default='np.arange(0.0, 0.25, 0.025)',
                         help='threshold for candidate frames with scores')
     parser.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
-    parser.add_argument('--ratio', type=float, default=0.1,
-                        help='selected top/bottom k segments for action/background')
     parser.add_argument('--fps', type=int, default=25)
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
     parser.add_argument('--num_iter', type=int, default=10000)
@@ -44,7 +42,6 @@ class Config(object):
         self.score_th = eval(args.score_th)
         self.map_th = args.map_th
         self.num_seg = args.num_seg
-        self.ratio = args.ratio
         self.fps = args.fps
         self.rate = args.rate
         self.num_iter = args.num_iter
