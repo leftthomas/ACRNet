@@ -18,8 +18,7 @@ def train_loop(network, data_loader, train_optimizer, n_iter):
     data, label = next(data_loader)
     data, label = data.cuda(), label.cuda()
     act_label = label
-    bkg_label = torch.ones_like(label)
-    bkg_label /= torch.sum(bkg_label, dim=-1, keepdim=True)
+    bkg_label = torch.zeros_like(label)
 
     train_optimizer.zero_grad()
     act_score, bkg_score, _ = network(data)

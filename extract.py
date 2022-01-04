@@ -5,18 +5,13 @@ import numpy as np
 import torch
 from PIL import Image
 from pytorch_i3d import InceptionI3d
-from torchvision import transforms
-
-
-def get_transform():
-    return transforms.Compose([transforms.Resize(224), transforms.CenterCrop(224)])
+from torchvision.transforms import CenterCrop
 
 
 def load_frame(frame_file):
     data = Image.open(frame_file)
     assert (min(data.size) == 256)
-
-    data = get_transform()(data)
+    data = CenterCrop(size=224)(data)
     data = np.array(data, dtype=np.float32)
     data = (data * 2 / 255) - 1
 

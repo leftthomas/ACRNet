@@ -1,33 +1,38 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class Model(nn.Module):
     def __init__(self, num_classes, feat_dim=2048):
         super(Model, self).__init__()
-
-        self.num_classes = num_classes
-        self.conv = nn.Conv1d(feat_dim, feat_dim, kernel_size=3, padding=1, groups=2)
-        self.fc = nn.Conv1d(feat_dim, 2 * num_classes, kernel_size=1, groups=2)
-        # introduce dropout for robust, eliminate the noise
-        self.drop_out = nn.Dropout()
-        self.relu = nn.ReLU(inplace=True)
+        self.conv = nn.Sequential(nn.Conv1d(feat_dim, feat_dim, kernel_size=3, padding=1, groups=2),
+                                  nn.ReLU(inplace=True), nn.Dropout(),
+                                  nn.Conv1d(feat_dim, feat_dim, kernel_size=3, padding=1, groups=2),
+                                  nn.ReLU(inplace=True), nn.Dropout())
+        self.proxy = nn.Parameter(torch.empty(1, num_classes, feat_dim))
+        nn.init.xavier_uniform_(self.proxy)
 
     def forward(self, x):
         # [N, D, T]
-        x = x.permute(0, 2, 1)
-        out = self.drop_out(self.relu(self.conv(x)))
-        # [N, T, C]
-        seg_score = self.fc(out).permute(0, 2, 1)
-        seg_score = (seg_score[:, :, :self.num_classes] + seg_score[:, :, self.num_classes:]) / 2
+        out = self.conv(x.permute(0, 2, 1))
+        rgb_out, flow_out = torch.chunk(out, 2, dim=1)
+        rgb_out, flow_out = F.normalize(rgb_out, dim=1), F.normalize(flow_out, dim=1)
+        rgb_proxy, flow_proxy = torch.chunk(self.proxy, 2, dim=-1)
+        rgb_proxy, flow_proxy = F.normalize(rgb_proxy, dim=-1), F.normalize(flow_proxy, dim=-1)
 
-        k = max(int(seg_score.shape[1] * 0.1), 1)
-        top_score, top_idx = seg_score.topk(k=k, dim=1, largest=True)
-        bottom_score, bottom_idx = seg_score.topk(k=k, dim=1, largest=False)
+        # [N, T, C]
+        rgb_score = torch.softmax(torch.matmul(rgb_proxy, rgb_out).permute(0, 2, 1) / 0.07, dim=-1)
+        flow_score = torch.softmax(torch.matmul(flow_proxy, flow_out).permute(0, 2, 1) / 0.07, dim=-1)
+
+        rgb_sim = torch.softmax(torch.matmul(rgb_out.permute(0, 2, 1), rgb_out), dim=-1)
+        flow_sim = torch.softmax(torch.matmul(flow_out.permute(0, 2, 1), flow_out), dim=-1)
+        rgb_score = (rgb_sim.unsqueeze(dim=-1) * rgb_score.unsqueeze(dim=1)).sum(dim=-2)
+        flow_score = (flow_sim.unsqueeze(dim=-1) * flow_score.unsqueeze(dim=1)).sum(dim=-2)
+        seg_score = (rgb_score + flow_score) / 2
 
         # [N, C]
-        act_score = torch.sigmoid(torch.mean(top_score, dim=1))
-        bkg_score = torch.sigmoid(torch.mean(bottom_score, dim=1))
-        # [N, T, C]
-        seg_score = torch.sigmoid(seg_score)
+        act_score = torch.mean(torch.topk(seg_score, k=min(10, seg_score.shape[1]), dim=1, largest=True)[0], dim=1)
+        bkg_score = torch.mean(torch.topk(seg_score, k=min(10, seg_score.shape[1]), dim=1, largest=False)[0], dim=1)
+
         return act_score, bkg_score, seg_score
