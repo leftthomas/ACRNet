@@ -2,7 +2,6 @@ import json
 import os
 
 import torch
-import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -18,12 +17,12 @@ def train_loop(network, data_loader, train_optimizer, n_iter):
     data, label = next(data_loader)
     data, label = data.cuda(), label.cuda()
     act_label = label
-    bkg_label = torch.zeros_like(label)
+    bkg_label = torch.ones_like(label)
 
     train_optimizer.zero_grad()
     act_score, bkg_score, _ = network(data)
-    act_loss = bce_criterion(act_score, act_label)
-    bkg_loss = bce_criterion(bkg_score, bkg_label)
+    act_loss = torch.mean(-torch.log(act_score + 1e-8) * act_label)
+    bkg_loss = torch.mean(-torch.log(1 - bkg_score + 1e-8) * bkg_label)
     loss = act_loss + bkg_loss
     loss.backward()
     train_optimizer.step()
@@ -41,7 +40,7 @@ if __name__ == '__main__':
     net = Model(len(train_data.class_to_idx)).cuda()
     optimizer = Adam(net.parameters())
 
-    best_mAP, metric_info, bce_criterion = 0, {}, nn.BCELoss()
+    best_mAP, metric_info = 0, {}
     train_bar = tqdm(range(1, args.num_iter + 1), total=args.num_iter, initial=1, dynamic_ncols=True)
     for step in train_bar:
         if (step - 1) % len(train_loader) == 0:

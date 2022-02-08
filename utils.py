@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
     parser.add_argument('--num_iter', type=int, default=10000)
     parser.add_argument('--eval_iter', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
     parser.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
 
