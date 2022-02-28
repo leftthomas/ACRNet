@@ -17,15 +17,14 @@ def parse_args():
     parser.add_argument('--data_name', type=str, default='thumos14',
                         choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
     parser.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
-    parser.add_argument('--iou_th', type=float, default=0.6, help='threshold for NMS IoU')
-    parser.add_argument('--score_th', type=str, default='np.arange(0.0, 0.25, 0.025)',
-                        help='threshold for candidate frames with scores')
     parser.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
-    parser.add_argument('--fps', type=int, default=25)
+    parser.add_argument('--fps', type=int, default=25, help='fps for each video')
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
-    parser.add_argument('--num_iter', type=int, default=10000)
-    parser.add_argument('--eval_iter', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--num_iter', type=int, default=10000, help='iterations of training')
+    parser.add_argument('--eval_iter', type=int, default=100, help='iterations of evaluating')
+    parser.add_argument('--batch_size', type=int, default=64, help='batch size of loading videos for training')
+    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+    parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
     parser.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
 
@@ -38,8 +37,6 @@ class Config(object):
         self.save_path = args.save_path
         self.data_name = args.data_name
         self.act_th = args.act_th
-        self.iou_th = args.iou_th
-        self.score_th = eval(args.score_th)
         self.map_th = args.map_th
         self.num_seg = args.num_seg
         self.fps = args.fps
@@ -47,6 +44,8 @@ class Config(object):
         self.num_iter = args.num_iter
         self.eval_iter = args.eval_iter
         self.batch_size = args.batch_size
+        self.lr = args.lr
+        self.workers = args.workers
         self.model_file = args.model_file
 
 
