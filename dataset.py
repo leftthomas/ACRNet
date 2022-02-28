@@ -12,7 +12,7 @@ from utils import which_ffmpeg
 
 
 class VideoDataset(Dataset):
-    def __init__(self, data_path, data_name, data_type, num_seg):
+    def __init__(self, data_path, data_name, data_type, num_seg, length=None):
 
         self.data_name, self.data_type, self.num_seg = data_name, data_type, num_seg
 
@@ -40,13 +40,16 @@ class VideoDataset(Dataset):
         for i, key in enumerate(sorted(classes)):
             self.class_to_idx[key] = i
             self.idx_to_class[i] = key
+        # for train according to the given length, for test according to the real length
+        self.num = len(self.rgb)
+        self.sample_num = length if data_type == 'train' else self.num
 
     def __len__(self):
-        return len(self.rgb)
+        return self.sample_num
 
     def __getitem__(self, index):
-        rgb, flow = np.load(self.rgb[index]), np.load(self.flow[index])
-        video_key, num_seg = os.path.basename(self.rgb[index]).split('.')[0][: -4], rgb.shape[0]
+        rgb, flow = np.load(self.rgb[index % self.num]), np.load(self.flow[index % self.num])
+        video_key, num_seg = os.path.basename(self.rgb[index % self.num]).split('.')[0][: -4], rgb.shape[0]
         annotation = self.annotations['d_{}'.format(video_key)]
         sample_idx = self.random_sampling(num_seg) if self.data_type == 'train' else self.uniform_sampling(num_seg)
         rgb, flow = torch.from_numpy(rgb[sample_idx]), torch.from_numpy(flow[sample_idx])
@@ -55,10 +58,7 @@ class VideoDataset(Dataset):
         for item in annotation['annotations']:
             label[self.class_to_idx[item['label']]] = 1
         feat = torch.cat((rgb, flow), dim=-1)
-        if self.data_type == 'train':
-            return feat, label
-        else:
-            return feat, label, video_key, num_seg
+        return feat, label, video_key, num_seg
 
     def random_sampling(self, num_seg):
         sample_idx = np.append(np.arange(self.num_seg) * num_seg / self.num_seg, num_seg)
