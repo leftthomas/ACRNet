@@ -64,4 +64,4 @@ class Model(nn.Module):
             dim=1) / act_count
         bkg_score = torch.where(~sim_filter.expand_as(seg_score), seg_score, torch.zeros_like(seg_score)).sum(
             dim=1) / bkg_count
-        return act_score, bkg_score, seg_score
+        return act_score, seg_score
