@@ -63,13 +63,13 @@ You can easily train and test the model by running the script below. If you want
 ### Train Model
 
 ```
-python train.py --data_name activitynet1.2 --num_segments 50 --seed 0
+python main.py --data_name activitynet1.2 --num_segments 50 --seed 0
 ```
 
 ### Test Model
 
 ```
-python test.py --data_name thumos14 --model_file result/thumos14_model.pth
+python main.py --data_name thumos14 --model_file result/thumos14_model.pth
 ```
 
 ## Benchmarks
