@@ -94,7 +94,7 @@ if __name__ == '__main__':
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
-    model = Model(len(test_data.class_to_idx), args.num_blocks, args.num_heads, args.feat_dims,
+    model = Model(len(test_data.class_to_idx), args.num_block, args.num_head, args.feat_dim,
                   args.expansion_factor, args.k).cuda()
     best_mAP, metric_info = 0, {}
     if args.model_file:

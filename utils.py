@@ -16,12 +16,9 @@ def parse_args():
     parser.add_argument('--save_path', type=str, default='result')
     parser.add_argument('--data_name', type=str, default='thumos14',
                         choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
-    parser.add_argument('--num_blocks', nargs='+', type=int, default=[4, 6, 6, 8],
-                        help='number of transformer blocks for each level')
-    parser.add_argument('--num_heads', nargs='+', type=int, default=[1, 2, 4, 8],
-                        help='number of attention heads for each level')
-    parser.add_argument('--feat_dims', nargs='+', type=int, default=[1024, 512, 256, 128],
-                        help='dimension of feature for each level')
+    parser.add_argument('--num_block', type=int, default=6, help='number of transformer blocks')
+    parser.add_argument('--num_head', type=int, default=2, help='number of attention heads')
+    parser.add_argument('--feat_dim', type=int, default=1024, help='dimension of hidden feature')
     parser.add_argument('--expansion_factor', type=float, default=2.66, help='factor of dimension expansion for GFN')
     parser.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
     parser.add_argument('--k', type=int, default=10, help='used segments for action score prediction')
@@ -45,9 +42,9 @@ class Config(object):
         self.data_path = args.data_path
         self.save_path = args.save_path
         self.data_name = args.data_name
-        self.num_blocks = args.num_blocks
-        self.num_heads = args.num_heads
-        self.feat_dims = args.feat_dims
+        self.num_block = args.num_block
+        self.num_head = args.num_head
+        self.feat_dim = args.feat_dim
         self.expansion_factor = args.expansion_factor
         self.act_th = args.act_th
         self.map_th = args.map_th

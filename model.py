@@ -3,23 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class CAS(nn.Module):
-    def __init__(self, len_feature, num_classes):
-        super(CAS, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv1d(in_channels=len_feature, out_channels=len_feature, kernel_size=3, stride=1, padding=1), nn.ReLU())
-
-        self.classifier = nn.Conv1d(in_channels=len_feature, out_channels=num_classes, kernel_size=1, bias=False)
-        self.drop_out = nn.Dropout(p=0.7)
-
-    def forward(self, x):
-        out = self.conv(x.permute(0, 2, 1))
-        feat = out.permute(0, 2, 1)
-        out = self.classifier(self.drop_out(out))
-        out = out.permute(0, 2, 1)
-        return out, feat
-
-
 # Multi-Head Graph Attention
 class MGA(nn.Module):
     def __init__(self, feat_dim, num_head):
@@ -79,41 +62,23 @@ class TransformerBlock(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, num_blocks, num_heads, feat_dims, expansion_factor, k):
+    def __init__(self, num_classes, num_block, num_head, feat_dim, expansion_factor, k):
         super(Model, self).__init__()
 
         self.k = k
-        # self.feat_conv = nn.Conv1d(2048, feat_dims[0], kernel_size=3, padding=1, bias=False)
-        # self.encoders = nn.ModuleList(
-        #     [nn.Sequential(*[TransformerBlock(feat_dim, num_head, expansion_factor) for _ in range(num_block)]) for
-        #      num_block, num_head, feat_dim in zip(num_blocks, num_heads, feat_dims)])
-        # # the number of down sample == the number of encoder - 1
-        # self.downs = nn.ModuleList([nn.Conv1d(feat_dims[i], feat_dims[i + 1], kernel_size=3, padding=1, bias=False)
-        #                             for i in range(len(feat_dims) - 1)])
-        # self.cls = nn.Conv1d(feat_dims[-1], num_classes, kernel_size=3, padding=1, bias=False)
-        self.cas_module = CAS(2048, num_classes)
+        self.feat_conv = nn.Conv1d(2048, feat_dim, kernel_size=3, padding=1, bias=False)
+        self.encoder = nn.Sequential(*[TransformerBlock(feat_dim, num_head, expansion_factor)
+                                       for _ in range(num_block)])
+        self.cls = nn.Conv1d(feat_dim, num_classes, kernel_size=3, padding=1, bias=False)
 
     def forward(self, x):
-        # # [N, L, D]
-        # x = self.feat_conv(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        # for i, encoder in enumerate(self.encoders):
-        #     x = encoder(x)
-        #     # do not down sample the last encoder
-        #     if i < len(self.encoders) - 1:
-        #         x = self.downs[i](x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        # x = self.cls(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        # # [N, L, C]
-        # seg_score = torch.softmax(x, dim=-1)
-        # # [N, C]
-        # act_score = torch.softmax(x.topk(k=min(self.k, x.shape[1]), dim=1)[0].mean(dim=1), dim=-1)
-        # # [N, C]
-        # bkg_score = torch.softmax(x.topk(k=min(self.k, x.shape[1]), dim=1, largest=False)[0].mean(dim=1), dim=-1)
-        # return act_score, bkg_score, seg_score
-        cas, feat = self.cas_module(x)
-        topk_scores = cas.topk(k=min(self.k, x.shape[1]), dim=1)[0]
-        bottomk_scores = cas.topk(k=min(self.k, x.shape[1]), dim=1, largest=False)[0]
-        score_act = torch.softmax(torch.mean(topk_scores, dim=1), dim=-1)
-        score_bkg = torch.softmax(torch.mean(bottomk_scores, dim=1), dim=-1)
-        score_cas = torch.softmax(cas, dim=-1)
-
-        return score_act, score_bkg, score_cas
+        # [N, L, D]
+        x = self.feat_conv(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        x = self.cls(self.encoder(x).transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        # [N, L, C]
+        seg_score = torch.softmax(x, dim=-1)
+        # [N, C]
+        act_score = torch.softmax(x.topk(k=min(self.k, x.shape[1]), dim=1)[0].mean(dim=1), dim=-1)
+        # [N, C]
+        bkg_score = torch.softmax(x.topk(k=min(self.k, x.shape[1]), dim=1, largest=False)[0].mean(dim=1), dim=-1)
+        return act_score, bkg_score, seg_score
