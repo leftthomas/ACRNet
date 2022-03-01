@@ -87,5 +87,5 @@ class Model(nn.Module):
         # [N, L, C]
         seg_score = torch.softmax(x, dim=-1)
         # [N, C]
-        act_score = torch.softmax(x.topk(k=self.k, dim=1)[0].mean(dim=1), dim=-1)
+        act_score = torch.softmax(x.topk(k=min(self.k, x.shape[1]), dim=1)[0].mean(dim=1), dim=-1)
         return act_score, seg_score
