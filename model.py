@@ -17,15 +17,15 @@ class MGA(nn.Module):
     def forward(self, x):
         n, d, l = x.shape
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
-        # [N, H, D/H, L]
-        q = q.reshape(n, self.num_heads, -1, l)
-        k = k.reshape(n, self.num_heads, -1, l)
-        v = v.reshape(n, self.num_heads, -1, l)
+        # [N, H, L, D/H]
+        q = q.reshape(n, self.num_heads, -1, l).transpose(-2, -1).contiguous()
+        k = k.reshape(n, self.num_heads, -1, l).transpose(-2, -1).contiguous()
+        v = v.reshape(n, self.num_heads, -1, l).transpose(-2, -1).contiguous()
         q, k = F.normalize(q, dim=-1), F.normalize(k, dim=-1)
-        # [N, H, D/H, D/H]
+        # [N, H, L, L]
         attn = torch.softmax(torch.matmul(q, k.transpose(-2, -1).contiguous()) * self.temperature, dim=-1)
 
-        out = self.project_out(torch.matmul(attn, v).reshape(n, -1, l))
+        out = self.project_out(torch.matmul(attn, v).transpose(-2, -1).contiguous().reshape(n, -1, l))
         return out
 
 
