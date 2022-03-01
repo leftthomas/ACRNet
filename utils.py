@@ -16,14 +16,23 @@ def parse_args():
     parser.add_argument('--save_path', type=str, default='result')
     parser.add_argument('--data_name', type=str, default='thumos14',
                         choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
+    parser.add_argument('--num_blocks', nargs='+', type=int, default=[4, 6, 6, 8],
+                        help='number of transformer blocks for each level')
+    parser.add_argument('--num_heads', nargs='+', type=int, default=[1, 2, 4, 8],
+                        help='number of attention heads for each level')
+    parser.add_argument('--feat_dims', nargs='+', type=int, default=[1024, 512, 256, 128],
+                        help='dimension of feature for each level')
+    parser.add_argument('--expansion_factor', type=float, default=2.66, help='factor of dimension expansion for GFN')
     parser.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
-    parser.add_argument('--num_seg', type=int, default=750, help='used segments for each video')
+    parser.add_argument('--k', type=int, default=10, help='used segments for action score prediction')
+    parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
     parser.add_argument('--fps', type=int, default=25, help='fps for each video')
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
     parser.add_argument('--num_iter', type=int, default=10000, help='iterations of training')
     parser.add_argument('--eval_iter', type=int, default=100, help='iterations of evaluating')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of loading videos for training')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+    parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay for optimizer')
     parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
     parser.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
@@ -36,8 +45,13 @@ class Config(object):
         self.data_path = args.data_path
         self.save_path = args.save_path
         self.data_name = args.data_name
+        self.num_blocks = args.num_blocks
+        self.num_heads = args.num_heads
+        self.feat_dims = args.feat_dims
+        self.expansion_factor = args.expansion_factor
         self.act_th = args.act_th
         self.map_th = args.map_th
+        self.k = args.k
         self.num_seg = args.num_seg
         self.fps = args.fps
         self.rate = args.rate
@@ -45,6 +59,7 @@ class Config(object):
         self.eval_iter = args.eval_iter
         self.batch_size = args.batch_size
         self.lr = args.lr
+        self.weight_decay = args.weight_decay
         self.workers = args.workers
         self.model_file = args.model_file
 

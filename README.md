@@ -108,7 +108,7 @@ The models are trained on one NVIDIA GeForce RTX 2060 SUPER GPU (8G). All the hy
     <td align="center">18.2</td>
     <td align="center">9.2</td>
     <td align="center">36.1</td>
-    <td align="center"><a href="https://pan.baidu.com/s/1mv-RHb9VNu2FYBdzjNehPA">GoogleDrive</a></td>
+    <td align="center"><a href="https://pan.baidu.com/s/1mv-RHb9VNu2FYBdzjNehPA">MEGA</a></td>
   </tr>
 </tbody>
 </table>
@@ -147,7 +147,7 @@ mAP@AVG is the average mAP under the thresholds 0.1:0.1:0.7.
     <td align="center">23.9</td>
     <td align="center">5.7</td>
     <td align="center">23.7</td>
-    <td align="center"><a href="https://pan.baidu.com/s/11_7eu29IQ50rBU2W-dFceg">GoogleDrive</a></td>
+    <td align="center"><a href="https://pan.baidu.com/s/11_7eu29IQ50rBU2W-dFceg">MEGA</a></td>
   </tr>
 </tbody>
 </table>

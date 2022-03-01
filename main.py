@@ -94,7 +94,8 @@ if __name__ == '__main__':
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
-    model = Model(len(test_data.class_to_idx)).cuda()
+    model = Model(len(test_data.class_to_idx), args.num_blocks, args.num_heads, args.feat_dims,
+                  args.expansion_factor, args.k).cuda()
     best_mAP, metric_info = 0, {}
     if args.model_file:
         model.load_state_dict(torch.load(args.model_file))
@@ -104,7 +105,7 @@ if __name__ == '__main__':
         train_data = VideoDataset(args.data_path, args.data_name, 'train', args.num_seg,
                                   args.batch_size * args.num_iter)
         train_loader = iter(DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers))
-        optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+        optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
         total_loss, total_num, metric_info['Loss'] = 0.0, 0, []
         train_bar = tqdm(range(1, args.num_iter + 1), initial=1, dynamic_ncols=True)
