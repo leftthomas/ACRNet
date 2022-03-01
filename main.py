@@ -113,7 +113,7 @@ if __name__ == '__main__':
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
             out, _ = model(feat)
-            loss = F.binary_cross_entropy(out, label)
+            loss = F.binary_cross_entropy(out, label / torch.sum(label, dim=-1, keepdim=True))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
