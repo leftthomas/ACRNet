@@ -1,6 +1,6 @@
 # RelationNet
 
-A PyTorch implementation of RelationNet based on ICME 2022 paper
+A PyTorch implementation of RelationNet based on ACM MM 2022 paper
 [Mining Relations for Weakly-Supervised Action Localization]().
 
 ![Network Architecture](result/structure.png)
@@ -11,7 +11,7 @@ A PyTorch implementation of RelationNet based on ICME 2022 paper
 - [PyTorch](https://pytorch.org)
 
 ```
-conda install pytorch=1.10.1 torchvision cudatoolkit=11.3 -c pytorch
+conda install pytorch=1.10.2 torchvision cudatoolkit=11.3 -c pytorch
 ```
 
 - [MMAction2](https://mmaction2.readthedocs.io)
@@ -25,14 +25,15 @@ mim install mmaction2 -f https://github.com/open-mmlab/mmaction2.git
 
 [THUMOS 14](http://crcv.ucf.edu/THUMOS14/download.html) and [ActivityNet](http://activity-net.org/download.html)
 datasets are used in this repo, you should download these datasets from official websites. The RGB and Flow features of
-these datasets are extracted by `dataset.py` with `25FPS`. You should follow
+these datasets are extracted by `dataset.py` with `25 FPS`. You should follow
 [this link](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7) to install OpenCV4 with CUDA. And then
 compile [denseFlow_GPU](https://github.com/daveboat/denseFlow_GPU), put the executable program in this dir. The options
-could be found in `dataset.py`, this script will take a lot of time to extract the features. Finally, I3D features of
-these datasets are extracted by [this repo](https://github.com/Finspire13/pytorch-i3d-feature-extraction), the
-`extract_features.py` file should be replaced with `extract.py`, the options could be found in `extract.py`. To make
-this research friendly, we uploaded these I3D features in [MEGA](https://mega.nz/folder/6sFxjaZB#Jtx69Kb2RHu2ldXoNzsODQ)
-. You could download them from there, and make sure the data directory structure is organized as follows:
+could be found in [dataset.py](dataset.py), this script will take a lot of time to extract the features. Finally, I3D
+features of these datasets are extracted by [this repo](https://github.com/Finspire13/pytorch-i3d-feature-extraction),
+the `extract_features.py` file should be replaced with [extract.py](extract.py), the options could be found in
+[extract.py](extract.py). To make this research friendly, we uploaded these I3D features in
+[MEGA](https://mega.nz/folder/6sFxjaZB#Jtx69Kb2RHu2ldXoNzsODQ). You could download them from there, and make sure the
+data directory structure is organized as follows:
 
  ```
 ├── thumos14                                    |  ├── activitynet
@@ -58,23 +59,23 @@ this research friendly, we uploaded these I3D features in [MEGA](https://mega.nz
 ## Usage
 
 You can easily train and test the model by running the script below. If you want to try other options, please refer to
-`utils.py`.
+[utils.py](utils.py).
 
 ### Train Model
 
 ```
-python main.py --data_name activitynet1.2 --num_segments 50 --seed 0
+python main.py --data_name activitynet1.2 --num_segments 50 --seed 1
 ```
 
 ### Test Model
 
 ```
-python main.py --data_name thumos14 --model_file result/thumos14_model.pth
+python main.py --data_name thumos14 --model_file result/thumos14.pth
 ```
 
 ## Benchmarks
 
-The models are trained on one NVIDIA GeForce GTX 1080 Ti GPU (11G). All the hyper-parameters are the default values.
+The models are trained on one NVIDIA GeForce RTX 2060 SUPER GPU (8G). All the hyper-parameters are the default values.
 
 ### THUMOS14
 

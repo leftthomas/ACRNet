@@ -42,7 +42,7 @@ class VideoDataset(Dataset):
             self.idx_to_class[i] = key
         # for train according to the given length, for test according to the real length
         self.num = len(self.rgb)
-        self.sample_num = length if data_type == 'train' else self.num
+        self.sample_num = length if self.data_type == 'train' else self.num
 
     def __len__(self):
         return self.sample_num
