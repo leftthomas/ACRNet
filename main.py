@@ -107,7 +107,7 @@ if __name__ == '__main__':
                                   args.batch_size * args.num_iter)
         train_loader = iter(DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers))
         optimizer = Adam(model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
-        lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter, eta_min=args.min_lr)
+        lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter)
 
         total_loss, total_num, metric_info['Loss'] = 0.0, 0, []
         train_bar = tqdm(range(1, args.num_iter + 1), initial=1, dynamic_ncols=True)

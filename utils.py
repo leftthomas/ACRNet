@@ -25,11 +25,10 @@ def parse_args():
     parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
     parser.add_argument('--fps', type=int, default=25, help='fps for each video')
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
-    parser.add_argument('--num_iter', type=int, default=10000, help='iterations of training')
+    parser.add_argument('--num_iter', type=int, default=2000, help='iterations of training')
     parser.add_argument('--eval_iter', type=int, default=100, help='iterations of evaluating')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of loading videos for training')
     parser.add_argument('--init_lr', type=float, default=1e-5, help='initial learning rate')
-    parser.add_argument('--min_lr', type=float, default=1e-6, help='minimum learning rate')
     parser.add_argument('--weight_decay', type=float, default=1e-5, help='weight decay for optimizer')
     parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
@@ -57,7 +56,6 @@ class Config(object):
         self.eval_iter = args.eval_iter
         self.batch_size = args.batch_size
         self.init_lr = args.init_lr
-        self.min_lr = args.min_lr
         self.weight_decay = args.weight_decay
         self.workers = args.workers
         self.model_file = args.model_file
