@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument('--num_iter', type=int, default=10000, help='iterations of training')
     parser.add_argument('--eval_iter', type=int, default=100, help='iterations of evaluating')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of loading videos for training')
-    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+    parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay for optimizer')
     parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
