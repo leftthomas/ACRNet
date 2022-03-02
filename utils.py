@@ -28,7 +28,8 @@ def parse_args():
     parser.add_argument('--num_iter', type=int, default=10000, help='iterations of training')
     parser.add_argument('--eval_iter', type=int, default=100, help='iterations of evaluating')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of loading videos for training')
-    parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+    parser.add_argument('--init_lr', type=float, default=0.0001, help='initial learning rate')
+    parser.add_argument('--min_lr', type=float, default=0.000001, help='minimum learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay for optimizer')
     parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
@@ -55,7 +56,8 @@ class Config(object):
         self.num_iter = args.num_iter
         self.eval_iter = args.eval_iter
         self.batch_size = args.batch_size
-        self.lr = args.lr
+        self.init_lr = args.init_lr
+        self.min_lr = args.min_lr
         self.weight_decay = args.weight_decay
         self.workers = args.workers
         self.model_file = args.model_file
