@@ -31,10 +31,10 @@ class MGA(nn.Module):
 
 # Gated Feed-Forward Network
 class GFN(nn.Module):
-    def __init__(self, feat_dim, expansion_factor):
+    def __init__(self, feat_dim, expansion):
         super(GFN, self).__init__()
 
-        hidden_dim = int(feat_dim * expansion_factor)
+        hidden_dim = int(feat_dim * expansion)
         self.project_in = nn.Conv1d(feat_dim, hidden_dim * 2, kernel_size=1, bias=False)
         self.conv = nn.Conv1d(hidden_dim * 2, hidden_dim * 2, kernel_size=3, padding=1,
                               groups=hidden_dim * 2, bias=False)
@@ -47,13 +47,13 @@ class GFN(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, feat_dim, num_head, expansion_factor):
+    def __init__(self, feat_dim, num_head, expansion):
         super(TransformerBlock, self).__init__()
 
         self.norm1 = nn.LayerNorm(feat_dim)
         self.attn = MGA(feat_dim, num_head)
         self.norm2 = nn.LayerNorm(feat_dim)
-        self.ffn = GFN(feat_dim, expansion_factor)
+        self.ffn = GFN(feat_dim, expansion)
 
     def forward(self, x):
         x = x + self.attn(self.norm1(x).transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous()
@@ -62,13 +62,12 @@ class TransformerBlock(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, num_block, num_head, feat_dim, expansion_factor, k):
+    def __init__(self, num_classes, num_block, num_head, feat_dim, expansion, k):
         super(Model, self).__init__()
 
         self.k = k
         self.feat_conv = nn.Conv1d(2048, feat_dim, kernel_size=3, padding=1, bias=False)
-        self.encoder = nn.Sequential(*[TransformerBlock(feat_dim, num_head, expansion_factor)
-                                       for _ in range(num_block)])
+        self.encoder = nn.Sequential(*[TransformerBlock(feat_dim, num_head, expansion) for _ in range(num_block)])
         self.cls = nn.Conv1d(feat_dim, num_classes, kernel_size=3, padding=1, bias=False)
 
     def forward(self, x):
