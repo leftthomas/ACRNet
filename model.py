@@ -62,10 +62,10 @@ class TransformerBlock(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, num_block, num_head, feat_dim, expansion, k):
+    def __init__(self, num_classes, num_block, num_head, feat_dim, expansion, factor):
         super(Model, self).__init__()
 
-        self.k = k
+        self.factor = factor
         self.feat_conv = nn.Conv1d(2048, feat_dim, kernel_size=3, padding=1, bias=False)
         self.encoder = nn.Sequential(*[TransformerBlock(feat_dim, num_head, expansion) for _ in range(num_block)])
         self.cls = nn.Conv1d(feat_dim, num_classes, kernel_size=3, padding=1, bias=False)
@@ -77,7 +77,7 @@ class Model(nn.Module):
         # [N, L, C]
         seg_score = torch.softmax(x, dim=-1)
         # [N, C]
-        act_score = torch.softmax(x.topk(k=min(self.k, x.shape[1]), dim=1)[0].mean(dim=1), dim=-1)
+        act_score = torch.softmax(x.topk(k=min(self.factor, x.shape[1]), dim=1)[0].mean(dim=1), dim=-1)
         # [N, C]
-        bkg_score = torch.softmax(x.topk(k=min(self.k, x.shape[1]), dim=1, largest=False)[0].mean(dim=1), dim=-1)
+        bkg_score = torch.softmax(x.topk(k=min(self.factor, x.shape[1]), dim=1, largest=False)[0].mean(dim=1), dim=-1)
         return act_score, bkg_score, seg_score

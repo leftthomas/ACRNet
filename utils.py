@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument('--feat_dim', type=int, default=1024, help='dimension of hidden feature')
     parser.add_argument('--expansion', type=float, default=2.66, help='expansion of dimension for GFN')
     parser.add_argument('--act_th', type=float, default=0.2, help='threshold for action score')
-    parser.add_argument('--k', type=int, default=150, help='used segments for action score prediction')
+    parser.add_argument('--factor', type=int, default=8, help='used top n/factor segments for action prediction')
     parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
     parser.add_argument('--fps', type=int, default=25, help='fps for each video')
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
@@ -48,7 +48,7 @@ class Config(object):
         self.expansion = args.expansion
         self.act_th = args.act_th
         self.map_th = args.map_th
-        self.k = args.k
+        self.factor = args.factor
         self.num_seg = args.num_seg
         self.fps = args.fps
         self.rate = args.rate
