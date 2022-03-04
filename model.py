@@ -10,9 +10,9 @@ class MGA(nn.Module):
         self.num_heads = num_head
         self.temperature = nn.Parameter(torch.ones(1, num_head, 1, 1))
 
-        self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1, bias=False)
-        self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3, bias=False)
-        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
+        self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1)
+        self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3)
+        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1)
 
     def forward(self, x):
         n, d, l = x.shape
@@ -33,10 +33,9 @@ class MGA(nn.Module):
 class GFN(nn.Module):
     def __init__(self, feat_dim):
         super(GFN, self).__init__()
-
-        self.project_in = nn.Conv1d(feat_dim, feat_dim * 2, kernel_size=1, bias=False)
-        self.conv = nn.Conv1d(feat_dim * 2, feat_dim * 2, kernel_size=3, padding=1, groups=feat_dim * 2, bias=False)
-        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
+        self.project_in = nn.Conv1d(feat_dim, feat_dim * 2, kernel_size=1)
+        self.conv = nn.Conv1d(feat_dim * 2, feat_dim * 2, kernel_size=3, padding=1, groups=feat_dim * 2)
+        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1)
 
     def forward(self, x):
         x1, x2 = self.conv(self.project_in(x)).chunk(2, dim=1)
@@ -54,9 +53,10 @@ class TransformerBlock(nn.Module):
         self.ffn = GFN(feat_dim)
 
     def forward(self, x):
+        x = x.transpose(-2, -1).contiguous()
         x = x + self.attn(self.norm1(x).transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous()
         x = x + self.ffn(self.norm2(x).transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous()
-        return x
+        return x.transpose(-2, -1).contiguous()
 
 
 class Model(nn.Module):
@@ -64,23 +64,15 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.factor = factor
-
-        self.cas_encoder = nn.Sequential(nn.Conv1d(in_channels=2048, out_channels=hidden_dim, kernel_size=1),
-                                         nn.ReLU(), nn.Conv1d(in_channels=hidden_dim, out_channels=num_classes,
-                                                              kernel_size=1))
-        self.sas_rgb_encoder = nn.Sequential(nn.Conv1d(in_channels=1024, out_channels=hidden_dim, kernel_size=1),
-                                             nn.ReLU(),
-                                             nn.Conv1d(in_channels=hidden_dim, out_channels=1, kernel_size=1))
-        self.sas_flow_encoder = nn.Sequential(nn.Conv1d(in_channels=1024, out_channels=hidden_dim, kernel_size=1),
-                                              nn.ReLU(),
-                                              nn.Conv1d(in_channels=hidden_dim, out_channels=1, kernel_size=1))
-
-        # self.cas_encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
-        #                              TransformerBlock(hidden_dim, num_head),
-        #                              nn.Conv1d(hidden_dim, num_classes, kernel_size=3, padding=1, bias=False))
-        # self.sas_encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
-        #                              TransformerBlock(hidden_dim, num_head),
-        #                              nn.Conv1d(hidden_dim, 1, kernel_size=3, padding=1, bias=False))
+        self.cas_encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=1), nn.ReLU(),
+                                         TransformerBlock(hidden_dim, num_head),
+                                         nn.Conv1d(hidden_dim, num_classes, kernel_size=1))
+        self.sas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=1), nn.ReLU(),
+                                             TransformerBlock(hidden_dim, num_head),
+                                             nn.Conv1d(hidden_dim, 1, kernel_size=1))
+        self.sas_flow_encoder = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=1), nn.ReLU(),
+                                              TransformerBlock(hidden_dim, num_head),
+                                              nn.Conv1d(hidden_dim, 1, kernel_size=1))
 
     def forward(self, x):
         # [N, L, C], class activation sequence
