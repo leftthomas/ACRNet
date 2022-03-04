@@ -21,7 +21,7 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, _, _, _, seg_score = net(data)
+            act_score, _, _, seg_score = net(data)
             # [C],  [T, C]
             act_score, seg_score = torch.softmax(act_score, dim=-1).squeeze(0), seg_score.squeeze(0)
 
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
-    model = Model(len(test_data.class_to_idx), args.num_head, args.hidden_dim, args.factor).cuda()
+    model = Model(len(test_data.class_to_idx), args.hidden_dim, args.factor).cuda()
     best_mAP, metric_info = 0, {}
     if args.model_file:
         model.load_state_dict(torch.load(args.model_file))
@@ -118,11 +118,10 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, fb_rgb_score, fb_flow_score, fore_index, _ = model(feat)
+            action_score, fb_score, fore_index, _ = model(feat)
             act_loss = cross_entropy(action_score, label)
-            fore_rgb_loss = cross_entropy(fb_rgb_score, form_fore_back(fore_index, args.num_seg, label))
-            fore_flow_loss = cross_entropy(fb_flow_score, form_fore_back(fore_index, args.num_seg, label))
-            loss = act_loss + fore_rgb_loss + fore_flow_loss
+            fore_loss = cross_entropy(fb_score, form_fore_back(fore_index, args.num_seg, label))
+            loss = act_loss + fore_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
