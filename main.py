@@ -3,16 +3,14 @@ import json
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn.functional as F
 from mmaction.core.evaluation import ActivityNetLocalization
 from torch.optim import Adam
-from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, form_fore_back
-from utils import parse_args
+from model import Model, form_fore_back, generalized_cross_entropy, cross_entropy
+from utils import parse_args, basnet_nms, compute_score
 from utils import revert_frame, grouping, result2json
 
 
@@ -22,11 +20,11 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, _, _, seg_score = net(data)
+            act_score, _, _, _, seg_score = net(data)
             # [C],  [T, C]
-            act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
+            act_score, seg_score = torch.softmax(act_score, dim=-1).squeeze(0), seg_score.squeeze(0)
 
-            pred = torch.ge(act_score, args.act_th)
+            pred = torch.ge(act_score, args.cls_th)
             num_correct += 1 if torch.equal(gt, pred.float()) else 0
             num_total += 1
 
@@ -37,16 +35,20 @@ def test_loop(net, data_loader, num_iter):
             proposal_dict = {}
             for i, status in enumerate(pred):
                 if status:
-                    proposals = grouping(np.where(frame_score[:, i] >= args.act_th)[0])
-                    # make sure the proposal to be regions
-                    for proposal in proposals:
-                        if len(proposal) >= 2:
-                            if i not in proposal_dict:
-                                proposal_dict[i] = []
-                            score = np.mean(frame_score[proposal, i])
-                            # change frame index to second
-                            start, end = (proposal[0] + 1) / args.fps, (proposal[-1] + 2) / args.fps
-                            proposal_dict[i].append([start, end, score])
+                    # enrich the proposal pool by using multiple thresholds
+                    for threshold in args.act_th:
+                        proposals = grouping(np.where(frame_score[:, i] >= threshold)[0])
+                        # make sure the proposal to be regions
+                        for proposal in proposals:
+                            if len(proposal) >= 2:
+                                if i not in proposal_dict:
+                                    proposal_dict[i] = []
+                                score = compute_score(frame_score[:, i], act_score[i].cpu().numpy(), proposal)
+                                # change frame index to second
+                                start, end = (proposal[0] + 1) / args.fps, (proposal[-1] + 2) / args.fps
+                                proposal_dict[i].append([start, end, score])
+                    # temporal nms
+                    proposal_dict[i] = basnet_nms(proposal_dict[i], args.iou_th)
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total
@@ -95,8 +97,7 @@ if __name__ == '__main__':
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
-    model = Model(len(test_data.class_to_idx), args.num_block, args.num_head, args.feat_dim,
-                  args.expansion, args.factor).cuda()
+    model = Model(len(test_data.class_to_idx), args.num_head, args.hidden_dim, args.factor).cuda()
     best_mAP, metric_info = 0, {}
     if args.model_file:
         model.load_state_dict(torch.load(args.model_file))
@@ -107,7 +108,7 @@ if __name__ == '__main__':
                                   args.batch_size * args.num_iter)
         train_loader = iter(DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers))
         optimizer = Adam(model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
-        lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter)
+        # lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter)
 
         total_loss, total_num, metric_info['Loss'] = 0.0, 0, []
         train_bar = tqdm(range(1, args.num_iter + 1), initial=1, dynamic_ncols=True)
@@ -115,10 +116,13 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, fb_score, fore_index, _ = model(feat)
-            act_loss = F.binary_cross_entropy(action_score, label)
-            fore_loss = F.binary_cross_entropy(fb_score, form_fore_back(fore_index, args.num_seg, label))
-            loss = act_loss + fore_loss
+            action_score, fb_rgb_score, fb_flow_score, fore_index, _ = model(feat)
+            act_loss = cross_entropy(action_score, label)
+            fore_rgb_loss = generalized_cross_entropy(fb_rgb_score, form_fore_back(fore_index, args.num_seg, label),
+                                                      0.7)
+            fore_flow_loss = generalized_cross_entropy(fb_flow_score, form_fore_back(fore_index, args.num_seg, label),
+                                                       0.7)
+            loss = act_loss + fore_rgb_loss + fore_flow_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -127,7 +131,7 @@ if __name__ == '__main__':
             total_loss += loss.item() * feat.size(0)
             train_bar.set_description('Train Step: [{}/{}] Loss: {:.3f}'
                                       .format(step, args.num_iter, total_loss / total_num))
-            lr_scheduler.step()
+            # lr_scheduler.step()
             if step % args.eval_iter == 0:
                 metric_info['Loss'].append('{:.3f}'.format(total_loss / total_num))
                 save_loop(model, test_loader, step)

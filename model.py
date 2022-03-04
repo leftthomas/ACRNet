@@ -31,14 +31,12 @@ class MGA(nn.Module):
 
 # Gated Feed-Forward Network
 class GFN(nn.Module):
-    def __init__(self, feat_dim, expansion):
+    def __init__(self, feat_dim):
         super(GFN, self).__init__()
 
-        hidden_dim = int(feat_dim * expansion)
-        self.project_in = nn.Conv1d(feat_dim, hidden_dim * 2, kernel_size=1, bias=False)
-        self.conv = nn.Conv1d(hidden_dim * 2, hidden_dim * 2, kernel_size=3, padding=1,
-                              groups=hidden_dim * 2, bias=False)
-        self.project_out = nn.Conv1d(hidden_dim, feat_dim, kernel_size=1, bias=False)
+        self.project_in = nn.Conv1d(feat_dim, feat_dim * 2, kernel_size=1, bias=False)
+        self.conv = nn.Conv1d(feat_dim * 2, feat_dim * 2, kernel_size=3, padding=1, groups=feat_dim * 2, bias=False)
+        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
 
     def forward(self, x):
         x1, x2 = self.conv(self.project_in(x)).chunk(2, dim=1)
@@ -47,13 +45,13 @@ class GFN(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, feat_dim, num_head, expansion):
+    def __init__(self, feat_dim, num_head):
         super(TransformerBlock, self).__init__()
 
         self.norm1 = nn.LayerNorm(feat_dim)
         self.attn = MGA(feat_dim, num_head)
         self.norm2 = nn.LayerNorm(feat_dim)
-        self.ffn = GFN(feat_dim, expansion)
+        self.ffn = GFN(feat_dim)
 
     def forward(self, x):
         x = x + self.attn(self.norm1(x).transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous()
@@ -62,42 +60,44 @@ class TransformerBlock(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, num_block, num_head, feat_dim, expansion, factor):
+    def __init__(self, num_classes, num_head, hidden_dim, factor):
         super(Model, self).__init__()
 
         self.factor = factor
-        self.feat_conv = nn.Conv1d(2048, feat_dim, kernel_size=3, padding=1, bias=False)
-        self.encoder = nn.Sequential(*[TransformerBlock(feat_dim, num_head, expansion) for _ in range(num_block)])
-        self.proxies = nn.Parameter(torch.randn(1, num_classes, feat_dim))
+
+        self.cas_encoder = nn.Sequential(nn.Conv1d(in_channels=2048, out_channels=hidden_dim, kernel_size=1),
+                                         nn.ReLU(), nn.Conv1d(in_channels=hidden_dim, out_channels=num_classes,
+                                                              kernel_size=1))
+        self.sas_rgb_encoder = nn.Sequential(nn.Conv1d(in_channels=1024, out_channels=hidden_dim, kernel_size=1),
+                                             nn.ReLU(),
+                                             nn.Conv1d(in_channels=hidden_dim, out_channels=1, kernel_size=1))
+        self.sas_flow_encoder = nn.Sequential(nn.Conv1d(in_channels=1024, out_channels=hidden_dim, kernel_size=1),
+                                              nn.ReLU(),
+                                              nn.Conv1d(in_channels=hidden_dim, out_channels=1, kernel_size=1))
+
+        # self.cas_encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
+        #                              TransformerBlock(hidden_dim, num_head),
+        #                              nn.Conv1d(hidden_dim, num_classes, kernel_size=3, padding=1, bias=False))
+        # self.sas_encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
+        #                              TransformerBlock(hidden_dim, num_head),
+        #                              nn.Conv1d(hidden_dim, 1, kernel_size=3, padding=1, bias=False))
 
     def forward(self, x):
-        # [N, L, D]
-        feat = self.encoder(self.feat_conv(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous())
         # [N, L, C], class activation sequence
-        cas = torch.matmul(F.normalize(feat, dim=-1), F.normalize(self.proxies, dim=-1).transpose(-1, -2).contiguous())
-        # the direction of feature is used to learn the segment-action relation
+        cas = self.cas_encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         sa_score = torch.softmax(cas, dim=-1)
         # [N, L, 1], segment activation sequence
-        sas = torch.norm(feat, p=2, dim=-1, keepdim=True)
-        # the length of feature is used to learn the foreground-background relation
-        fb_score = minmax_norm(sas)
+        sas_rgb = self.sas_rgb_encoder(x[:, :, :1024].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        sas_flow = self.sas_flow_encoder(x[:, :, 1024:].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        fb_score_rgb = torch.sigmoid(sas_rgb)
+        fb_score_flow = torch.sigmoid(sas_flow)
 
-        seg_score = sa_score * fb_score
+        seg_score = (sa_score + fb_score_rgb + fb_score_flow) / 3
 
         fore_index = seg_score.topk(k=min(seg_score.shape[1] // self.factor, seg_score.shape[1]), dim=1)[1]
         # [N, C], action classification score is aggregated by cas
-        act_score = torch.sigmoid(torch.gather(cas, dim=1, index=fore_index).mean(dim=1))
-        return act_score, fb_score.squeeze(dim=-1), fore_index, seg_score
-
-
-def minmax_norm(sas):
-    min_val = torch.amin(sas, dim=1, keepdim=True)
-    max_val = torch.amax(sas, dim=1, keepdim=True)
-    interval = max_val - min_val
-    # avoid divided by zero
-    interval = torch.where(interval == 0.0, torch.ones_like(interval), interval)
-    sas = (sas - min_val) / interval
-    return sas
+        act_score = torch.gather(cas, dim=1, index=fore_index).mean(dim=1)
+        return act_score, fb_score_rgb.squeeze(dim=-1), fb_score_flow.squeeze(dim=-1), fore_index, seg_score
 
 
 def form_fore_back(fore_index, num_seg, label):
@@ -108,3 +108,19 @@ def form_fore_back(fore_index, num_seg, label):
         mask[pos_index] = 1.0
         fb_mask.append(mask)
     return torch.stack(fb_mask)
+
+
+# generalized cross entropy loss
+def generalized_cross_entropy(fb_score, label, q):
+    pos_factor = torch.sum(label, dim=1) + 1e-7
+    neg_factor = torch.sum(1 - label, dim=1) + 1e-7
+    first_term = torch.mean(torch.sum(((1 - (fb_score + 1e-7) ** q) / q) * label, dim=1) / pos_factor)
+    second_term = torch.mean(
+        torch.sum(((1 - (1 - fb_score + 1e-7) ** q) / q) * (1 - label), dim=1) / neg_factor)
+    return first_term + second_term
+
+
+def cross_entropy(logits, label):
+    label = label / torch.sum(label, dim=1, keepdim=True) + 1e-10
+    loss = -torch.mean(torch.sum(label * F.log_softmax(logits, dim=1), dim=1), dim=0)
+    return loss
