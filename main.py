@@ -6,6 +6,7 @@ import torch
 from mmaction.core.evaluation import ActivityNetLocalization
 from mmaction.localization import soft_nms
 from torch.optim import Adam
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -109,7 +110,7 @@ if __name__ == '__main__':
                                   args.batch_size * args.num_iter)
         train_loader = iter(DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers))
         optimizer = Adam(model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
-        # lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter)
+        lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter)
 
         total_loss, total_num, metric_info['Loss'] = 0.0, 0, []
         train_bar = tqdm(range(1, args.num_iter + 1), initial=1, dynamic_ncols=True)
@@ -130,7 +131,7 @@ if __name__ == '__main__':
             total_loss += loss.item() * feat.size(0)
             train_bar.set_description('Train Step: [{}/{}] Loss: {:.3f}'
                                       .format(step, args.num_iter, total_loss / total_num))
-            # lr_scheduler.step()
+            lr_scheduler.step()
             if step % args.eval_iter == 0:
                 metric_info['Loss'].append('{:.3f}'.format(total_loss / total_num))
                 save_loop(model, test_loader, step)

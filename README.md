@@ -17,7 +17,7 @@ conda install pytorch=1.10.2 torchvision cudatoolkit=11.3 -c pytorch
 - [MMAction2](https://mmaction2.readthedocs.io)
 
 ```
-pip install git+https://github.com/open-mmlab/mim.git
+pip install openmim
 mim install mmaction2 -f https://github.com/open-mmlab/mmaction2.git
 ```
 
