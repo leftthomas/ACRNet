@@ -91,7 +91,8 @@ class Model(nn.Module):
 
 
 def minmax_norm(sas):
-    min_val, max_val = torch.aminmax(sas, dim=1, keepdim=True)
+    min_val = torch.amin(sas, dim=1, keepdim=True)
+    max_val = torch.amax(sas, dim=1, keepdim=True)
     interval = max_val - min_val
     # avoid divided by zero
     interval = torch.where(interval == 0.0, torch.ones_like(interval), interval)
