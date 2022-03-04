@@ -8,29 +8,19 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.factor = factor
-        self.cas_rgb_encoder = nn.Sequential(nn.Conv1d(in_channels=1024, out_channels=hidden_dim, kernel_size=1),
-                                             nn.ReLU(), nn.Conv1d(in_channels=hidden_dim, out_channels=num_classes,
-                                                                  kernel_size=1))
-        self.cas_flow_encoder = nn.Sequential(nn.Conv1d(in_channels=1024, out_channels=hidden_dim, kernel_size=1),
-                                              nn.ReLU(), nn.Conv1d(in_channels=hidden_dim, out_channels=num_classes,
-                                                                   kernel_size=1))
-        self.sas_rgb_encoder = nn.Sequential(nn.Conv1d(in_channels=1024, out_channels=hidden_dim, kernel_size=1),
-                                             nn.ReLU(),
-                                             nn.Conv1d(in_channels=hidden_dim, out_channels=1, kernel_size=1))
-        self.sas_flow_encoder = nn.Sequential(nn.Conv1d(in_channels=1024, out_channels=hidden_dim, kernel_size=1),
-                                              nn.ReLU(),
-                                              nn.Conv1d(in_channels=hidden_dim, out_channels=1, kernel_size=1))
+        self.cas_encoder = nn.Sequential(nn.Conv1d(in_channels=2048, out_channels=hidden_dim, kernel_size=1),
+                                         nn.ReLU(), nn.Conv1d(in_channels=hidden_dim, out_channels=num_classes,
+                                                              kernel_size=1))
+        self.sas_encoder = nn.Sequential(nn.Conv1d(in_channels=2048, out_channels=hidden_dim, kernel_size=1),
+                                         nn.ReLU(),
+                                         nn.Conv1d(in_channels=hidden_dim, out_channels=1, kernel_size=1))
 
     def forward(self, x):
         # [N, L, C], class activation sequence
-        cas_rgb = self.cas_rgb_encoder(x[:, :, :1024].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        cas_flow = self.cas_rgb_encoder(x[:, :, 1024:].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        cas = cas_rgb + cas_flow
+        cas = self.cas_encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         sa_score = torch.softmax(cas, dim=-1)
         # [N, L, 1], segment activation sequence
-        sas_rgb = self.sas_rgb_encoder(x[:, :, :1024].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        sas_flow = self.sas_flow_encoder(x[:, :, 1024:].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        sas = sas_rgb + sas_flow
+        sas = self.sas_encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         fb_score = torch.sigmoid(sas)
 
         seg_score = (sa_score + fb_score) / 2
