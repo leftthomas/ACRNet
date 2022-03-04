@@ -110,17 +110,10 @@ def form_fore_back(fore_index, num_seg, label):
     return torch.stack(fb_mask)
 
 
-# generalized cross entropy loss
-def generalized_cross_entropy(fb_score, label, q):
-    pos_factor = torch.sum(label, dim=1) + 1e-7
-    neg_factor = torch.sum(1 - label, dim=1) + 1e-7
-    first_term = torch.mean(torch.sum(((1 - (fb_score + 1e-7) ** q) / q) * label, dim=1) / pos_factor)
-    second_term = torch.mean(
-        torch.sum(((1 - (1 - fb_score + 1e-7) ** q) / q) * (1 - label), dim=1) / neg_factor)
-    return first_term + second_term
-
-
-def cross_entropy(logits, label):
-    label = label / torch.sum(label, dim=1, keepdim=True) + 1e-10
-    loss = -torch.mean(torch.sum(label * F.log_softmax(logits, dim=1), dim=1), dim=0)
+def cross_entropy(score, label):
+    num = label.sum(dim=-1, keepdim=True)
+    # avoid divide by zero
+    num = torch.where(num == 0.0, torch.ones_like(num), num)
+    label = label / num
+    loss = -(label * F.log_softmax(score, dim=-1)).sum(dim=-1).mean(dim=0)
     return loss

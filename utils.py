@@ -104,52 +104,15 @@ def which_ffmpeg():
     return result.stdout.decode('utf-8').replace('\n', '')
 
 
-def basnet_nms(proposals, thresh, nms_alpha=0.35):
-    proposals = np.array(proposals)
-    x1 = proposals[:, 0]
-    x2 = proposals[:, 1]
-    scores = proposals[:, 2]
-
-    areas = x2 - x1 + 1
-    order = scores.argsort()[::-1]
-
-    keep = []
-    not_keep = []
-    while order.size > 0:
-        i = order[0]
-        keep.append(proposals[i].tolist())
-        xx1 = np.maximum(x1[i], x1[order[1:]])
-        xx2 = np.minimum(x2[i], x2[order[1:]])
-
-        inter = np.maximum(0.0, xx2 - xx1 + 1)
-
-        iou = inter / (areas[i] + areas[order[1:]] - inter)
-
-        inv_inds = np.where(iou >= thresh)[0]
-        props_mod = proposals[order[inv_inds + 1]]
-
-        for k in range(props_mod.shape[0]):
-            props_mod[k, 2] = props_mod[k, 2] * np.exp(-np.square(iou[inv_inds][k]) / nms_alpha)
-
-        not_keep.extend(props_mod.tolist())
-
-        inds = np.where(iou < thresh)[0]
-        order = order[inds + 1]
-    keep.extend(not_keep)
-
-    return keep
-
-
-def compute_score(scores, act_score, proposal, _lambda=0.25, gamma=0.2):
-    inner_score = np.mean(scores[proposal])
+def compute_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
+    inner_score = np.mean(frame_scores[proposal])
     outer_s = max(0, int(proposal[0] - _lambda * len(proposal)))
-    outer_e = min(int(scores.shape[0] - 1), int(proposal[-1] + _lambda * len(proposal)))
+    outer_e = min(int(frame_scores.shape[0] - 1), int(proposal[-1] + _lambda * len(proposal)))
     outer_temp_list = list(range(outer_s, int(proposal[0]))) + list(range(int(proposal[-1] + 1), outer_e + 1))
 
     if len(outer_temp_list) == 0:
         outer_score = 0.0
     else:
-        outer_score = np.mean(scores[outer_temp_list])
-    # obtain the proposal
-    c_score = inner_score - outer_score + gamma * act_score
-    return c_score
+        outer_score = np.mean(frame_scores[outer_temp_list])
+    score = inner_score - outer_score + gamma * act_score
+    return score

@@ -4,14 +4,14 @@ import numpy as np
 import pandas as pd
 import torch
 from mmaction.core.evaluation import ActivityNetLocalization
+from mmaction.localization import soft_nms
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, form_fore_back, generalized_cross_entropy, cross_entropy
-from utils import parse_args, basnet_nms, compute_score
-from utils import revert_frame, grouping, result2json
+from model import Model, form_fore_back, cross_entropy
+from utils import parse_args, compute_score, revert_frame, grouping, result2json
 
 
 def test_loop(net, data_loader, num_iter):
@@ -47,8 +47,9 @@ def test_loop(net, data_loader, num_iter):
                                 # change frame index to second
                                 start, end = (proposal[0] + 1) / args.fps, (proposal[-1] + 2) / args.fps
                                 proposal_dict[i].append([start, end, score])
-                    # temporal nms
-                    proposal_dict[i] = basnet_nms(proposal_dict[i], args.iou_th)
+                    # temporal soft nms
+                    proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.35, low_threshold=args.iou_th,
+                                                high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total
@@ -118,10 +119,8 @@ if __name__ == '__main__':
             feat, label = feat.cuda(), label.cuda()
             action_score, fb_rgb_score, fb_flow_score, fore_index, _ = model(feat)
             act_loss = cross_entropy(action_score, label)
-            fore_rgb_loss = generalized_cross_entropy(fb_rgb_score, form_fore_back(fore_index, args.num_seg, label),
-                                                      0.7)
-            fore_flow_loss = generalized_cross_entropy(fb_flow_score, form_fore_back(fore_index, args.num_seg, label),
-                                                       0.7)
+            fore_rgb_loss = cross_entropy(fb_rgb_score, form_fore_back(fore_index, args.num_seg, label))
+            fore_flow_loss = cross_entropy(fb_flow_score, form_fore_back(fore_index, args.num_seg, label))
             loss = act_loss + fore_rgb_loss + fore_flow_loss
             optimizer.zero_grad()
             loss.backward()
