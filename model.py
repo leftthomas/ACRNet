@@ -68,16 +68,42 @@ class Model(nn.Module):
         self.factor = factor
         self.feat_conv = nn.Conv1d(2048, feat_dim, kernel_size=3, padding=1, bias=False)
         self.encoder = nn.Sequential(*[TransformerBlock(feat_dim, num_head, expansion) for _ in range(num_block)])
-        self.cls = nn.Conv1d(feat_dim, num_classes, kernel_size=3, padding=1, bias=False)
+        self.proxies = nn.Parameter(torch.randn(1, num_classes, feat_dim))
 
     def forward(self, x):
         # [N, L, D]
-        x = self.feat_conv(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        x = self.cls(self.encoder(x).transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        # [N, L, C]
-        seg_score = torch.softmax(x, dim=-1)
-        # [N, C]
-        act_score = torch.softmax(x.topk(k=min(self.factor, x.shape[1]), dim=1)[0].mean(dim=1), dim=-1)
-        # [N, C]
-        bkg_score = torch.softmax(x.topk(k=min(self.factor, x.shape[1]), dim=1, largest=False)[0].mean(dim=1), dim=-1)
-        return act_score, bkg_score, seg_score
+        feat = self.encoder(self.feat_conv(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous())
+        # [N, L, C], class activation sequence
+        cas = torch.matmul(F.normalize(feat, dim=-1), F.normalize(self.proxies, dim=-1).transpose(-1, -2).contiguous())
+        # the direction of feature is used to learn the segment-action relation
+        sa_score = torch.softmax(cas, dim=-1)
+        # [N, L, 1], segment activation sequence
+        sas = torch.norm(feat, p=2, dim=-1, keepdim=True)
+        # the length of feature is used to learn the foreground-background relation
+        fb_score = minmax_norm(sas)
+
+        seg_score = sa_score * fb_score
+
+        fore_index = seg_score.topk(k=min(seg_score.shape[1] // self.factor, seg_score.shape[1]), dim=1)[1]
+        # [N, C], action classification score is aggregated by cas
+        act_score = torch.sigmoid(torch.gather(cas, dim=1, index=fore_index).mean(dim=1))
+        return act_score, fb_score.squeeze(dim=-1), fore_index, seg_score
+
+
+def minmax_norm(sas):
+    min_val, max_val = torch.aminmax(sas, dim=1, keepdim=True)
+    interval = max_val - min_val
+    # avoid divided by zero
+    interval = torch.where(interval == 0.0, torch.ones_like(interval), interval)
+    sas = (sas - min_val) / interval
+    return sas
+
+
+def form_fore_back(fore_index, num_seg, label):
+    fb_mask = []
+    for i in range(fore_index.shape[0]):
+        pos_index = fore_index[i][:, label[i].bool()].flatten()
+        mask = torch.zeros(num_seg, device=fore_index.device)
+        mask[pos_index] = 1.0
+        fb_mask.append(mask)
+    return torch.stack(fb_mask)

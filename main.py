@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model
+from model import Model, form_fore_back
 from utils import parse_args
 from utils import revert_frame, grouping, result2json
 
@@ -22,7 +22,7 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, bkg_score, seg_score = net(data)
+            act_score, _, _, seg_score = net(data)
             # [C],  [T, C]
             act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
 
@@ -115,10 +115,10 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, background_score, _ = model(feat)
-            act_loss = F.binary_cross_entropy(action_score, label / torch.sum(label, dim=-1, keepdim=True))
-            bkg_loss = F.binary_cross_entropy(background_score, torch.ones_like(label).div(label.shape[-1]))
-            loss = act_loss + bkg_loss
+            action_score, fb_score, fore_index, _ = model(feat)
+            act_loss = F.binary_cross_entropy(action_score, label)
+            fore_loss = F.binary_cross_entropy(fb_score, form_fore_back(fore_index, args.num_seg, label))
+            loss = act_loss + fore_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
