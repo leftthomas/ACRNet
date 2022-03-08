@@ -133,6 +133,7 @@ def draw_pred(frame_scores, proposal_dict, gt_dicts, idx_to_class, class_to_idx,
         count = np.zeros(frame_scores.shape[0])
         count[start:end] = 1
         axs[0].plot(frame_indexes, count, color=color_palette[class_to_idx[label]], label=label)
+        axs[0].fill_between(frame_indexes, count, color=color_palette[class_to_idx[label]])
     axs[0].set_ylabel('GT')
 
     for class_id, proposal_list in proposal_dict.items():
@@ -144,6 +145,7 @@ def draw_pred(frame_scores, proposal_dict, gt_dicts, idx_to_class, class_to_idx,
             count = np.zeros(frame_scores.shape[0])
             count[start:end] = 1
             axs[1].plot(frame_indexes, count, color=color_palette[class_id], label=idx_to_class[class_id])
+            # axs[1].fill_between(frame_indexes, count, color=color_palette[class_id])
     axs[1].set_ylabel('Pred')
     axs[2].set_ylabel('CAS')
 
