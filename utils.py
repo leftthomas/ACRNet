@@ -3,7 +3,9 @@ import os
 import random
 import subprocess
 
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 import torch
 from scipy.interpolate import interp1d
 from torch.backends import cudnn
@@ -114,3 +116,50 @@ def compute_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
         outer_score = np.mean(frame_scores[outer_temp_list])
     score = inner_score - outer_score + gamma * act_score
     return score
+
+
+def draw_pred(frame_scores, proposal_dict, gt_dicts, idx_to_class, class_to_idx, video_name, fps, save_path, data_name):
+    frame_indexes = np.arange(0, frame_scores.shape[0])
+    color_palette = sns.color_palette('deep', n_colors=len(idx_to_class))
+
+    fig, axs = plt.subplots(3, 1, figsize=(7, 3))
+
+    gt_list = gt_dicts['d_{}'.format(video_name)]['annotations']
+    for gt in gt_list:
+        start, end = gt['segment']
+        label = gt['label']
+        # change second to frame index
+        start, end = int(start * fps - 1), int(end * fps - 2)
+        count = np.zeros(frame_scores.shape[0])
+        count[start:end] = 1
+        axs[0].plot(frame_indexes, count, color=color_palette[class_to_idx[label]], label=label)
+    axs[0].set_ylabel('GT')
+
+    for class_id, proposal_list in proposal_dict.items():
+        axs[2].plot(frame_indexes, frame_scores[:, class_id], color=color_palette[class_id],
+                    label=idx_to_class[class_id])
+        for proposal in proposal_list:
+            # change second to frame index
+            start, end = int(proposal[0] * fps - 1), int(proposal[1] * fps - 2)
+            count = np.zeros(frame_scores.shape[0])
+            count[start:end] = 1
+            axs[1].plot(frame_indexes, count, color=color_palette[class_id], label=idx_to_class[class_id])
+    axs[1].set_ylabel('Pred')
+    axs[2].set_ylabel('CAS')
+
+    plt.setp(axs, xticks=[], yticks=[], xlim=(0, frame_scores.shape[0]), ylim=(0, 1))
+    lines, labels = [], []
+    for ax in axs:
+        ax_lines, ax_labels = ax.get_legend_handles_labels()
+        for line, label in zip(ax_lines, ax_labels):
+            if label not in labels:
+                lines.append(line)
+                labels.append(label)
+    fig.legend(lines, labels, loc=2, bbox_to_anchor=(0.91, 0.9))
+
+    save_name = '{}/{}/{}.pdf'.format(save_path, data_name, video_name)
+    if not os.path.exists(os.path.dirname(save_name)):
+        os.makedirs(os.path.dirname(save_name))
+    plt.savefig(save_name, bbox_inches='tight')
+    plt.cla()
+    plt.close('all')
