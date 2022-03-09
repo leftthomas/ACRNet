@@ -51,9 +51,10 @@ def test_loop(net, data_loader, num_iter):
                     # temporal soft nms
                     proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.35, low_threshold=args.iou_th,
                                                 high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
-            # draw the pred to vis
-            draw_pred(frame_score, proposal_dict, data_loader.dataset.annotations, data_loader.dataset.idx_to_class,
-                      data_loader.dataset.class_to_idx, video_name, args.fps, args.save_path, args.data_name)
+            if args.save_vis:
+                # draw the pred to vis
+                draw_pred(frame_score, proposal_dict, data_loader.dataset.annotations, data_loader.dataset.idx_to_class,
+                          data_loader.dataset.class_to_idx, video_name, args.fps, args.save_path, args.data_name)
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total

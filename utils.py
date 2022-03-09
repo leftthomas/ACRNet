@@ -34,6 +34,8 @@ def parse_args():
     parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
     parser.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
+    parser.add_argument('--save_vis', action='store_true', default=False,
+                        help='save class activation sequence and frame similarity matrix or not')
 
     return init_args(parser.parse_args())
 
@@ -59,6 +61,7 @@ class Config(object):
         self.weight_decay = args.weight_decay
         self.workers = args.workers
         self.model_file = args.model_file
+        self.save_vis = args.save_vis
 
 
 def init_args(args):
