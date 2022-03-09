@@ -3,36 +3,30 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# Multi-Head Graph Attention
-class MGA(nn.Module):
-    def __init__(self, feat_dim, num_head):
-        super(MGA, self).__init__()
-        self.num_heads = num_head
-        self.temperature = nn.Parameter(torch.ones(1, num_head, 1, 1))
+# Graph Attention
+class GA(nn.Module):
+    def __init__(self, feat_dim):
+        super(GA, self).__init__()
+        self.temperature = nn.Parameter(torch.ones(1))
 
         self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1, bias=False)
         self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3, bias=False)
         self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
 
     def forward(self, x):
-        n, d, l = x.shape
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
-        # [N, H, L, D/H]
-        q = q.reshape(n, self.num_heads, -1, l).transpose(-2, -1).contiguous()
-        k = k.reshape(n, self.num_heads, -1, l).transpose(-2, -1).contiguous()
-        v = v.reshape(n, self.num_heads, -1, l).transpose(-2, -1).contiguous()
-        q, k = F.normalize(q, dim=-1), F.normalize(k, dim=-1)
-        # [N, H, L, L]
-        attn = torch.softmax(torch.matmul(q, k.transpose(-2, -1).contiguous()) * self.temperature, dim=-1)
+        q, k = F.normalize(q, dim=1), F.normalize(k, dim=1)
+        # [N, L, L]
+        attn = torch.softmax(torch.matmul(q.transpose(-2, -1).contiguous(), k) * self.temperature, dim=-1)
 
-        out = self.project_out(torch.matmul(attn, v).transpose(-2, -1).contiguous().reshape(n, -1, l))
+        out = self.project_out(torch.matmul(attn, v.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         return out
 
 
-# Gated Feed-Forward Network
-class GFN(nn.Module):
+# Gated Feed-forward
+class GF(nn.Module):
     def __init__(self, feat_dim):
-        super(GFN, self).__init__()
+        super(GF, self).__init__()
 
         self.project_in = nn.Conv1d(feat_dim, feat_dim * 2, kernel_size=1, bias=False)
         self.conv = nn.Conv1d(feat_dim * 2, feat_dim * 2, kernel_size=3, padding=1, groups=feat_dim * 2, bias=False)
@@ -45,13 +39,13 @@ class GFN(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, feat_dim, num_head):
+    def __init__(self, feat_dim):
         super(TransformerBlock, self).__init__()
 
         self.norm1 = nn.LayerNorm(feat_dim)
-        self.attn = MGA(feat_dim, num_head)
+        self.attn = GA(feat_dim)
         self.norm2 = nn.LayerNorm(feat_dim)
-        self.ffn = GFN(feat_dim)
+        self.ffn = GF(feat_dim)
 
     def forward(self, x):
         x = x + self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
@@ -60,15 +54,15 @@ class TransformerBlock(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, num_head, hidden_dim, factor):
+    def __init__(self, num_classes, hidden_dim, factor):
         super(Model, self).__init__()
 
         self.factor = factor
         self.cas_encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
-                                         TransformerBlock(hidden_dim, num_head),
+                                         TransformerBlock(hidden_dim),
                                          nn.Conv1d(hidden_dim, num_classes, kernel_size=3, padding=1, bias=False))
         self.sas_encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
-                                         TransformerBlock(hidden_dim, num_head),
+                                         TransformerBlock(hidden_dim),
                                          nn.Conv1d(hidden_dim, 1, kernel_size=3, padding=1, bias=False))
 
     def forward(self, x):

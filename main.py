@@ -103,7 +103,7 @@ if __name__ == '__main__':
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
-    model = Model(len(test_data.class_to_idx), args.num_head, args.hidden_dim, args.factor).cuda()
+    model = Model(len(test_data.class_to_idx), args.hidden_dim, args.factor).cuda()
     best_mAP, metric_info = 0, {}
     if args.model_file:
         model.load_state_dict(torch.load(args.model_file))
