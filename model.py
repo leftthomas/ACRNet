@@ -58,20 +58,21 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.factor = factor
-        self.cas_encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
-                                         TransformerBlock(hidden_dim),
-                                         nn.Conv1d(hidden_dim, num_classes, kernel_size=3, padding=1, bias=False))
-        self.sas_encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
-                                         TransformerBlock(hidden_dim),
-                                         nn.Conv1d(hidden_dim, 1, kernel_size=3, padding=1, bias=False))
+        self.encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
+                                     TransformerBlock(hidden_dim))
+        self.proxies = nn.Parameter(torch.randn(1, hidden_dim, num_classes))
 
     def forward(self, x):
+        # [N, L, D]
+        feat = self.encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         # [N, L, C], class activation sequence
-        cas = self.cas_encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        cas = torch.matmul(F.normalize(feat, dim=-1), self.proxies)
         sa_score = torch.softmax(cas, dim=-1)
         # [N, L, 1], segment activation sequence
-        sas = self.sas_encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        fb_score = torch.sigmoid(sas)
+        sas = torch.norm(feat, p=2, dim=-1, keepdim=True)
+        min_norm = torch.amin(sas, dim=1, keepdim=True)
+        max_norm = torch.amax(sas, dim=1, keepdim=True)
+        fb_score = (sas - min_norm) / max_norm
 
         seg_score = (sa_score + fb_score) / 2
 
