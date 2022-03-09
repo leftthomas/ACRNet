@@ -72,7 +72,7 @@ class Model(nn.Module):
         sas = torch.norm(feat, p=2, dim=-1, keepdim=True)
         min_norm = torch.amin(sas, dim=1, keepdim=True)
         max_norm = torch.amax(sas, dim=1, keepdim=True)
-        fb_score = (sas - min_norm) / max_norm
+        fb_score = (sas - min_norm) / torch.where(torch.eq(max_norm, 0.0), torch.ones_like(max_norm), max_norm)
 
         seg_score = (sa_score + fb_score) / 2
 
