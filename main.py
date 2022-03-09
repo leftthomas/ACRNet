@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, form_fore_back, cross_entropy
+from model import Model, obtain_mask, cross_entropy
 from utils import parse_args, compute_score, revert_frame, grouping, result2json, draw_pred
 
 
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
-    model = Model(len(test_data.class_to_idx), args.hidden_dim, args.factor).cuda()
+    model = Model(len(test_data.class_to_idx), args.hidden_dim, args.factor, args.temperature).cuda()
     best_mAP, metric_info = 0, {}
     if args.model_file:
         model.load_state_dict(torch.load(args.model_file))
@@ -122,10 +122,10 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, fb_score, fore_index, _ = model(feat)
-            act_loss = cross_entropy(action_score, label)
-            fore_loss = cross_entropy(fb_score, form_fore_back(fore_index, args.num_seg, label))
-            loss = act_loss + fore_loss
+            action_score, sas_score, pos_index, _ = model(feat)
+            cas_loss = cross_entropy(action_score, label)
+            sas_loss = cross_entropy(sas_score, obtain_mask(pos_index, args.num_seg, label))
+            loss = cas_loss + sas_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
