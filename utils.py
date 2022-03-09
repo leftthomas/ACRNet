@@ -18,6 +18,7 @@ def parse_args():
     parser.add_argument('--save_path', type=str, default='result')
     parser.add_argument('--data_name', type=str, default='thumos14',
                         choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
+    parser.add_argument('--num_head', type=int, default=4, help='number of attention heads')
     parser.add_argument('--hidden_dim', type=int, default=512, help='dimension of hidden feature')
     parser.add_argument('--cls_th', type=float, default=0.25, help='threshold for action classification')
     parser.add_argument('--iou_th', type=float, default=0.4, help='threshold for NMS IoU')
@@ -45,6 +46,7 @@ class Config(object):
         self.data_path = args.data_path
         self.save_path = args.save_path
         self.data_name = args.data_name
+        self.num_head = args.num_head
         self.hidden_dim = args.hidden_dim
         self.cls_th = args.cls_th
         self.iou_th = args.iou_th
