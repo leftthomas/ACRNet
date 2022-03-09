@@ -7,7 +7,7 @@ import torch.nn.functional as F
 class GA(nn.Module):
     def __init__(self, feat_dim):
         super(GA, self).__init__()
-        self.temperature = nn.Parameter(torch.ones(1))
+        self.temperature = 0.07
 
         self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1, bias=False)
         self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3, bias=False)
@@ -17,7 +17,7 @@ class GA(nn.Module):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
         q, k = F.normalize(q, dim=1), F.normalize(k, dim=1)
         # [N, L, L]
-        attn = torch.softmax(torch.matmul(q.transpose(-2, -1).contiguous(), k) * self.temperature, dim=-1)
+        attn = torch.softmax(torch.matmul(q.transpose(-2, -1).contiguous(), k) / self.temperature, dim=-1)
 
         out = self.project_out(torch.matmul(attn, v.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         return out
@@ -66,7 +66,7 @@ class Model(nn.Module):
         # [N, L, D]
         feat = self.encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         # [N, L, C], class activation sequence
-        cas = torch.matmul(F.normalize(feat, dim=-1), self.proxies)
+        cas = torch.matmul(F.normalize(feat, dim=-1), F.normalize(self.proxies, dim=1)) / 0.07
         sa_score = torch.softmax(cas, dim=-1)
         # [N, L, 1], segment activation sequence
         sas = torch.norm(feat, p=2, dim=-1, keepdim=True)
