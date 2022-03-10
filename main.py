@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, obtain_mask, cross_entropy, generalized_cross_entropy
+from model import Model, obtain_sas_label, cross_entropy, generalized_cross_entropy
 from utils import parse_args, compute_score, revert_frame, grouping, result2json, draw_pred
 
 
@@ -124,7 +124,7 @@ if __name__ == '__main__':
             feat, label = feat.cuda(), label.cuda()
             action_score, bkg_score, sas_score, act_index, _ = model(feat)
             cas_loss = cross_entropy(action_score, bkg_score, label)
-            sas_loss = generalized_cross_entropy(sas_score, obtain_mask(act_index, args.num_seg, label))
+            sas_loss = generalized_cross_entropy(sas_score, obtain_sas_label(act_index, args.num_seg, label))
             loss = cas_loss + sas_loss
             optimizer.zero_grad()
             loss.backward()

@@ -87,7 +87,7 @@ class Model(nn.Module):
         return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score
 
 
-def obtain_mask(act_index, num_seg, label):
+def obtain_sas_label(act_index, num_seg, label):
     masks = []
     for i in range(act_index.shape[0]):
         pos_index = act_index[i][:, label[i].bool()].flatten()
@@ -97,13 +97,17 @@ def obtain_mask(act_index, num_seg, label):
     return torch.stack(masks)
 
 
-def cross_entropy(act_score, bkg_score, label, eps=1e-8):
-    act_num = label.sum(dim=-1)
-    bkg_num = (1.0 - label).sum(dim=-1)
+def divide_label(label):
+    pos_num = label.sum(dim=-1)
+    neg_num = (1.0 - label).sum(dim=-1)
     # avoid divide by zero
-    act_num = torch.where(torch.eq(act_num, 0.0), torch.ones_like(act_num), act_num)
-    bkg_num = torch.where(torch.eq(bkg_num, 0.0), torch.ones_like(bkg_num), bkg_num)
+    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
+    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
+    return pos_num, neg_num
 
+
+def cross_entropy(act_score, bkg_score, label, eps=1e-8):
+    act_num, bkg_num = divide_label(label)
     act_loss = (-(label * torch.log(act_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
     bkg_loss = (-((1.0 - label) * torch.log(1.0 - bkg_score + eps)).sum(dim=-1) / bkg_num).mean(dim=0)
     return act_loss + bkg_loss
@@ -111,12 +115,7 @@ def cross_entropy(act_score, bkg_score, label, eps=1e-8):
 
 # ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
 def generalized_cross_entropy(score, label, q=0.7, eps=1e-8):
-    pos_num = label.sum(dim=-1)
-    neg_num = (1.0 - label).sum(dim=-1)
-    # avoid divide by zero
-    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
-    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
-
+    pos_num, neg_num = divide_label(label)
     pos_loss = ((((1.0 - (score + eps) ** q) / q) * label).sum(dim=-1) / pos_num).mean(dim=0)
     neg_loss = ((((1.0 - (1.0 - score + eps) ** q) / q) * (1.0 - label)).sum(dim=-1) / neg_num).mean(dim=0)
     return pos_loss + neg_loss
