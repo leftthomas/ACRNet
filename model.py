@@ -17,8 +17,13 @@ class GA(nn.Module):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
         q, k = F.normalize(q, dim=1), F.normalize(k, dim=1)
         # [N, L, L]
-        attn = torch.softmax(torch.matmul(q.transpose(-2, -1).contiguous(), k).div(self.temperature), dim=-1)
-
+        attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
+        # the feature is aggregated by the most similar features
+        threshold = attn.mean()
+        exp_val = torch.exp(attn.div(self.temperature))
+        mask = 1.0 / (1.0 + torch.exp(-50.0 * (attn - threshold)))
+        sum_val = (exp_val * mask).sum(dim=-1, keepdim=True)
+        attn = (exp_val / sum_val) * mask
         out = self.project_out(torch.matmul(attn, v.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         return out
 
