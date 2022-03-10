@@ -78,10 +78,13 @@ class Model(nn.Module):
 
         seg_score = (cas_score + sas_score) / 2
 
-        pos_index = seg_score.topk(k=min(seg_score.shape[1] // self.factor, seg_score.shape[1]), dim=1)[1]
+        act_index = seg_score.topk(k=min(seg_score.shape[1] // self.factor, seg_score.shape[1]), dim=1)[1]
+        bkg_index = seg_score.topk(k=min(seg_score.shape[1] // self.factor, seg_score.shape[1]), dim=1, largest=False)[
+            1]
         # [N, C], action classification score is aggregated by cas
-        act_score = torch.gather(cas, dim=1, index=pos_index).mean(dim=1)
-        return act_score, sas_score.squeeze(dim=-1), pos_index, seg_score
+        act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
+        bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
+        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score
 
 
 def obtain_mask(pos_index, num_seg, label):
@@ -94,13 +97,16 @@ def obtain_mask(pos_index, num_seg, label):
     return torch.stack(masks)
 
 
-def cross_entropy(score, label):
-    num = label.sum(dim=-1, keepdim=True)
+def cross_entropy(act_score, bkg_score, label, eps=1e-8):
+    act_num = label.sum(dim=-1)
+    bkg_num = (1.0 - label).sum(dim=-1)
     # avoid divide by zero
-    num = torch.where(torch.eq(num, 0.0), torch.ones_like(num), num)
-    label = label / num
-    loss = -(label * F.log_softmax(score, dim=-1)).sum(dim=-1).mean(dim=0)
-    return loss
+    act_num = torch.where(torch.eq(act_num, 0.0), torch.ones_like(act_num), act_num)
+    bkg_num = torch.where(torch.eq(bkg_num, 0.0), torch.ones_like(bkg_num), bkg_num)
+
+    act_loss = (-(label * torch.log(act_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
+    bkg_loss = (-((1.0 - label) * torch.log(1.0 - bkg_score + eps)).sum(dim=-1) / bkg_num).mean(dim=0)
+    return act_loss + bkg_loss
 
 
 # ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)

@@ -21,9 +21,9 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, _, _, seg_score = net(data)
+            act_score, _, _, _, seg_score = net(data)
             # [C],  [T, C]
-            act_score, seg_score = torch.softmax(act_score, dim=-1).squeeze(0), seg_score.squeeze(0)
+            act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
 
             pred = torch.ge(act_score, args.cls_th)
             num_correct += 1 if torch.equal(gt, pred.float()) else 0
@@ -122,8 +122,8 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, sas_score, pos_index, _ = model(feat)
-            cas_loss = cross_entropy(action_score, label)
+            action_score, bkg_score, sas_score, pos_index, _ = model(feat)
+            cas_loss = cross_entropy(action_score, bkg_score, label)
             sas_loss = generalized_cross_entropy(sas_score, obtain_mask(pos_index, args.num_seg, label))
             loss = cas_loss + sas_loss
             optimizer.zero_grad()
