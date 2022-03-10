@@ -97,7 +97,20 @@ def obtain_mask(pos_index, num_seg, label):
 def cross_entropy(score, label):
     num = label.sum(dim=-1, keepdim=True)
     # avoid divide by zero
-    num = torch.where(num == 0.0, torch.ones_like(num), num)
+    num = torch.where(torch.eq(num, 0.0), torch.ones_like(num), num)
     label = label / num
     loss = -(label * F.log_softmax(score, dim=-1)).sum(dim=-1).mean(dim=0)
     return loss
+
+
+# ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
+def generalized_cross_entropy(score, label, q=0.7, eps=1e-8):
+    pos_num = label.sum(dim=-1)
+    neg_num = (1.0 - label).sum(dim=-1)
+    # avoid divide by zero
+    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
+    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
+
+    pos_loss = ((((1.0 - (score + eps) ** q) / q) * label).sum(dim=-1) / pos_num).mean(dim=0)
+    neg_loss = ((((1.0 - (1.0 - score + eps) ** q) / q) * (1.0 - label)).sum(dim=-1) / neg_num).mean(dim=0)
+    return pos_loss + neg_loss
