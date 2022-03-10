@@ -87,12 +87,12 @@ class Model(nn.Module):
         return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score
 
 
-def obtain_mask(pos_index, num_seg, label):
+def obtain_mask(act_index, num_seg, label):
     masks = []
-    for i in range(pos_index.shape[0]):
-        index = pos_index[i][:, label[i].bool()].flatten()
-        mask = torch.zeros(num_seg, device=pos_index.device)
-        mask[index] = 1.0
+    for i in range(act_index.shape[0]):
+        pos_index = act_index[i][:, label[i].bool()].flatten()
+        mask = torch.zeros(num_seg, device=act_index.device)
+        mask[pos_index] = 1.0
         masks.append(mask)
     return torch.stack(masks)
 

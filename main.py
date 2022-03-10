@@ -122,9 +122,9 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, bkg_score, sas_score, pos_index, _ = model(feat)
+            action_score, bkg_score, sas_score, act_index, _ = model(feat)
             cas_loss = cross_entropy(action_score, bkg_score, label)
-            sas_loss = generalized_cross_entropy(sas_score, obtain_mask(pos_index, args.num_seg, label))
+            sas_loss = generalized_cross_entropy(sas_score, obtain_mask(act_index, args.num_seg, label))
             loss = cas_loss + sas_loss
             optimizer.zero_grad()
             loss.backward()
