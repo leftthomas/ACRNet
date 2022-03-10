@@ -110,7 +110,7 @@ def which_ffmpeg():
 
 
 # ref: Completeness Modeling and Context Separation for Weakly Supervised Temporal Action Localization (CVPR 2019)
-def compute_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
+def oic_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
     inner_score = np.mean(frame_scores[proposal])
     outer_s = max(0, int(proposal[0] - _lambda * len(proposal)))
     outer_e = min(int(frame_scores.shape[0] - 1), int(proposal[-1] + _lambda * len(proposal)))

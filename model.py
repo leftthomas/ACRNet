@@ -87,7 +87,7 @@ class Model(nn.Module):
         return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score
 
 
-def obtain_sas_label(act_index, num_seg, label):
+def sas_label(act_index, num_seg, label):
     masks = []
     for i in range(act_index.shape[0]):
         pos_index = act_index[i][:, label[i].bool()].flatten()

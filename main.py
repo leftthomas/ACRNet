@@ -11,8 +11,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, obtain_sas_label, cross_entropy, generalized_cross_entropy
-from utils import parse_args, compute_score, revert_frame, grouping, result2json, draw_pred
+from model import Model, sas_label, cross_entropy, generalized_cross_entropy
+from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred
 
 
 def test_loop(net, data_loader, num_iter):
@@ -44,7 +44,7 @@ def test_loop(net, data_loader, num_iter):
                             if len(proposal) >= 2:
                                 if i not in proposal_dict:
                                     proposal_dict[i] = []
-                                score = compute_score(frame_score[:, i], act_score[i].cpu().numpy(), proposal)
+                                score = oic_score(frame_score[:, i], act_score[i].cpu().numpy(), proposal)
                                 # change frame index to second
                                 start, end = (proposal[0] + 1) / args.fps, (proposal[-1] + 2) / args.fps
                                 proposal_dict[i].append([start, end, score])
@@ -124,7 +124,7 @@ if __name__ == '__main__':
             feat, label = feat.cuda(), label.cuda()
             action_score, bkg_score, sas_score, act_index, _ = model(feat)
             cas_loss = cross_entropy(action_score, bkg_score, label)
-            sas_loss = generalized_cross_entropy(sas_score, obtain_sas_label(act_index, args.num_seg, label))
+            sas_loss = generalized_cross_entropy(sas_score, sas_label(act_index, args.num_seg, label))
             loss = cas_loss + sas_loss
             optimizer.zero_grad()
             loss.backward()
