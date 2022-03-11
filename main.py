@@ -49,7 +49,8 @@ def test_loop(net, data_loader, num_iter):
                                 start, end = (proposal[0] + 1) / args.fps, (proposal[-1] + 2) / args.fps
                                 proposal_dict[i].append([start, end, score])
                     # temporal soft nms
-                    proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.35, low_threshold=args.iou_th,
+                    # ref: BSN: Boundary Sensitive Network for Temporal Action Proposal Generation (ECCV 2018)
+                    proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.75, low_threshold=args.iou_th,
                                                 high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
             if args.save_vis:
                 # draw the pred to vis
