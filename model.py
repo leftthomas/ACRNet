@@ -62,10 +62,11 @@ class Model(nn.Module):
         self.encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
                                      TransformerBlock(hidden_dim, temperature))
         self.proxies = nn.Parameter(torch.randn(1, hidden_dim, num_classes))
+        self.drop = nn.Dropout(p=0.5)
 
     def forward(self, x):
         # [N, L, D]
-        feat = self.encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        feat = self.drop(self.encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous())
         # [N, L, C], class activation sequence
         cas = torch.matmul(F.normalize(feat, dim=-1), F.normalize(self.proxies, dim=1)).div(self.temperature)
         cas_score = torch.softmax(cas, dim=-1)

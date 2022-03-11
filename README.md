@@ -11,7 +11,7 @@ A PyTorch implementation of RelationNet based on ACM MM 2022 paper
 - [PyTorch](https://pytorch.org)
 
 ```
-conda install pytorch=1.10.2 torchvision cudatoolkit=11.3 -c pytorch
+conda install pytorch=1.11.0 torchvision torchaudio cudatoolkit=11.3 -c pytorch
 ```
 
 - [MMAction2](https://mmaction2.readthedocs.io)
