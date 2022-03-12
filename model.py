@@ -19,8 +19,7 @@ class GA(nn.Module):
         attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
         min_attn = torch.amin(attn, dim=-1, keepdim=True)
         max_attn = torch.amax(attn, dim=-1, keepdim=True)
-        in_attn = max_attn - min_attn
-        attn = (attn - min_attn) / torch.where(torch.eq(in_attn, 0.0), torch.ones_like(in_attn), in_attn)
+        attn = (attn - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
 
         # ref: Graph Convolutional Networks for Temporal Action Localization (ICCV 2019)
         attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
