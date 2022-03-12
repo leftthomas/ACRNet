@@ -5,21 +5,26 @@ import torch.nn.functional as F
 
 # Graph Attention
 class GA(nn.Module):
-    def __init__(self, feat_dim, temperature):
+    def __init__(self, feat_dim, factor):
         super(GA, self).__init__()
-        self.temperature = temperature
-
+        self.factor = factor
         self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1, bias=False)
         self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3, bias=False)
         self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
 
     def forward(self, x):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
-        q, k = F.normalize(q, dim=1), F.normalize(k, dim=1)
+        q, k, v = F.normalize(q, dim=1), F.normalize(k, dim=1), v.transpose(-2, -1).contiguous()
         # [N, L, L]
-        attn = torch.softmax(torch.matmul(q.transpose(-2, -1).contiguous(), k).div(self.temperature), dim=-1)
+        attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
 
-        out = self.project_out(torch.matmul(attn, v.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        # ref: Graph Convolutional Networks for Temporal Action Localization (ICCV 2019)
+        top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
+        min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
+        attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
+        v = torch.matmul(attn, v) / torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
+
+        out = self.project_out(v.transpose(-2, -1).contiguous())
         return out
 
 
@@ -39,11 +44,11 @@ class GF(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, feat_dim, temperature):
+    def __init__(self, feat_dim, factor):
         super(TransformerBlock, self).__init__()
 
         self.norm1 = nn.LayerNorm(feat_dim)
-        self.attn = GA(feat_dim, temperature)
+        self.attn = GA(feat_dim, factor)
         self.norm2 = nn.LayerNorm(feat_dim)
         self.ffn = GF(feat_dim)
 
@@ -60,7 +65,7 @@ class Model(nn.Module):
         self.factor = factor
         self.temperature = temperature
         self.encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
-                                     TransformerBlock(hidden_dim, temperature))
+                                     TransformerBlock(hidden_dim, factor))
         self.proxies = nn.Parameter(torch.randn(1, hidden_dim, num_classes))
         self.drop = nn.Dropout(p=0.5)
 
