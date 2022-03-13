@@ -21,7 +21,7 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, _, _, _, seg_score = net(data)
+            act_score, _, _, _, _, seg_score = net(data)
             # [C],  [T, C]
             act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
 
@@ -123,10 +123,11 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, bkg_score, sas_score, act_index, _ = model(feat)
+            action_score, bkg_score, sas_rgb_score, sas_flow_score, act_index, _ = model(feat)
             cas_loss = cross_entropy(action_score, bkg_score, label)
-            sas_loss = generalized_cross_entropy(sas_score, sas_label(act_index, args.num_seg, label))
-            loss = cas_loss + sas_loss
+            sas_rgb_loss = generalized_cross_entropy(sas_rgb_score, sas_label(act_index, args.num_seg, label))
+            sas_flow_loss = generalized_cross_entropy(sas_flow_score, sas_label(act_index, args.num_seg, label))
+            loss = cas_loss + sas_rgb_loss + sas_flow_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

@@ -16,18 +16,18 @@ class GA(nn.Module):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
         q, k, v = F.normalize(q, dim=1), F.normalize(k, dim=1), v.transpose(-2, -1).contiguous()
         # [N, L, L]
-        # attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
-        # min_attn = torch.amin(attn, dim=-1, keepdim=True)
-        # max_attn = torch.amax(attn, dim=-1, keepdim=True)
-        # attn = (attn - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
-        #
-        # # ref: Graph Convolutional Networks for Temporal Action Localization (ICCV 2019)
-        # attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
-        # top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
-        # min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
-        # attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
-        # num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
-        # v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
+        attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
+        min_attn = torch.amin(attn, dim=-1, keepdim=True)
+        max_attn = torch.amax(attn, dim=-1, keepdim=True)
+        attn = (attn - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
+
+        # ref: Graph Convolutional Networks for Temporal Action Localization (ICCV 2019)
+        attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
+        top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
+        min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
+        attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
+        num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
+        v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
 
         out = self.project_out(v.transpose(-2, -1).contiguous())
         return out
@@ -69,9 +69,14 @@ class Model(nn.Module):
 
         self.factor = factor
         self.cas_branch = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False), nn.ReLU(),
-                                        nn.Conv1d(in_channels=hidden_dim, out_channels=num_classes, kernel_size=1))
-        self.sas_branch = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False), nn.ReLU(),
-                                        nn.Conv1d(in_channels=hidden_dim, out_channels=1, kernel_size=1))
+                                        # TransformerBlock(hidden_dim, factor),
+                                        nn.Conv1d(hidden_dim, num_classes, kernel_size=1))
+        self.sas_rgb = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=3, padding=1, bias=False), nn.ReLU(),
+                                     # TransformerBlock(hidden_dim, factor),
+                                     nn.Conv1d(hidden_dim, 1, kernel_size=1))
+        self.sas_flow = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=3, padding=1, bias=False), nn.ReLU(),
+                                      # TransformerBlock(hidden_dim, factor),
+                                      nn.Conv1d(hidden_dim, 1, kernel_size=1))
 
     def forward(self, x):
         # [N, L, C], class activation sequence
@@ -79,17 +84,19 @@ class Model(nn.Module):
         cas_score = torch.softmax(cas, dim=-1)
 
         # [N, L, 1], segment activation sequence
-        sas = self.sas_branch(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        sas_score = torch.sigmoid(sas)
+        sas_rgb = self.sas_rgb(x[:, :, :1024].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        sas_rgb_score = torch.sigmoid(sas_rgb)
+        sas_flow = self.sas_flow(x[:, :, 1024:].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        sas_flow_score = torch.sigmoid(sas_flow)
 
-        seg_score = (cas_score + sas_score) / 2
+        seg_score = (cas_score + sas_rgb_score + sas_flow_score) / 3
 
         act_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1)[1]
         bkg_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1, largest=False)[1]
         # [N, C], action classification score is aggregated by cas
         act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
         bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
-        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score
+        return act_score, bkg_score, sas_rgb_score.squeeze(dim=-1), sas_flow_score.squeeze(dim=-1), act_index, seg_score
 
 
 def sas_label(act_index, num_seg, label):
