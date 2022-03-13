@@ -10,6 +10,7 @@ class GA(nn.Module):
         self.factor = factor
         self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1, bias=False)
         self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3, bias=False)
+        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
 
     def forward(self, x):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
@@ -28,65 +29,72 @@ class GA(nn.Module):
         num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
         v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
 
-        return v.transpose(-2, -1).contiguous()
+        out = self.project_out(v.transpose(-2, -1).contiguous())
+        return out
 
 
 # Gated Feed-forward
 class GF(nn.Module):
-    def __init__(self, feat_dim, out_dim):
+    def __init__(self, feat_dim):
         super(GF, self).__init__()
-        self.conv = nn.Conv1d(feat_dim, out_dim, kernel_size=1)
+
+        self.project_in = nn.Conv1d(feat_dim, feat_dim * 2, kernel_size=1, bias=False)
+        self.conv = nn.Conv1d(feat_dim * 2, feat_dim * 2, kernel_size=3, padding=1, groups=feat_dim * 2, bias=False)
+        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
 
     def forward(self, x):
-        return self.conv(x)
+        x1, x2 = self.conv(self.project_in(x)).chunk(2, dim=1)
+        x = self.project_out(F.gelu(x1) * x2)
+        return x
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, feat_dim, out_dim, factor):
+    def __init__(self, feat_dim, factor):
         super(TransformerBlock, self).__init__()
 
         self.norm1 = nn.LayerNorm(feat_dim)
         self.attn = GA(feat_dim, factor)
         self.norm2 = nn.LayerNorm(feat_dim)
-        self.ffn = GF(feat_dim, out_dim)
+        self.ffn = GF(feat_dim)
 
     def forward(self, x):
-        x = self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
-        x = self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        x = x + self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         return x
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, hidden_dim, factor):
+    def __init__(self, num_classes, hidden_dim, factor, temperature):
         super(Model, self).__init__()
 
         self.factor = factor
-        self.cas_branch = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=1), nn.ReLU(),
-                                        TransformerBlock(hidden_dim, num_classes, factor))
-        self.sas_rgb = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=1), nn.ReLU(),
-                                     TransformerBlock(hidden_dim, 1, factor))
-        self.sas_flow = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=1), nn.ReLU(),
-                                      TransformerBlock(hidden_dim, 1, factor))
+        self.temperature = temperature
+        self.encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
+                                     TransformerBlock(hidden_dim, factor))
+        self.proxies = nn.Parameter(torch.randn(1, hidden_dim, num_classes))
+        self.drop = nn.Dropout(p=0.5)
 
     def forward(self, x):
+        # [N, L, D]
+        feat = self.drop(self.encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous())
         # [N, L, C], class activation sequence
-        cas = self.cas_branch(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        cas = torch.matmul(F.normalize(feat, dim=-1), F.normalize(self.proxies, dim=1)).div(self.temperature)
         cas_score = torch.softmax(cas, dim=-1)
 
         # [N, L, 1], segment activation sequence
-        sas_rgb = self.sas_rgb(x[:, :, :1024].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        sas_rgb_score = torch.sigmoid(sas_rgb)
-        sas_flow = self.sas_flow(x[:, :, 1024:].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        sas_flow_score = torch.sigmoid(sas_flow)
+        sas = torch.norm(feat, p=2, dim=-1, keepdim=True)
+        min_norm = torch.amin(sas, dim=1, keepdim=True)
+        max_norm = torch.amax(sas, dim=1, keepdim=True)
+        sas_score = (sas - min_norm) / torch.where(torch.eq(max_norm, 0.0), torch.ones_like(max_norm), max_norm)
 
-        seg_score = (cas_score + sas_rgb_score + sas_flow_score) / 3
+        seg_score = (cas_score + sas_score) / 2
 
         act_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1)[1]
         bkg_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1, largest=False)[1]
         # [N, C], action classification score is aggregated by cas
         act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
         bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
-        return act_score, bkg_score, sas_rgb_score.squeeze(dim=-1), sas_flow_score.squeeze(dim=-1), act_index, seg_score
+        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score
 
 
 def sas_label(act_index, num_seg, label):
