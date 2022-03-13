@@ -10,7 +10,6 @@ class GA(nn.Module):
         self.factor = factor
         self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1, bias=False)
         self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3, bias=False)
-        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
 
     def forward(self, x):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
@@ -29,8 +28,7 @@ class GA(nn.Module):
         num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
         v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
 
-        out = self.project_out(v.transpose(-2, -1).contiguous())
-        return out
+        return v.transpose(-2, -1).contiguous()
 
 
 # Gated Feed-forward
