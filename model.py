@@ -10,7 +10,6 @@ class GA(nn.Module):
         self.factor = factor
         self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1, bias=False)
         self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3, bias=False)
-        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
 
     def forward(self, x):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
@@ -29,37 +28,31 @@ class GA(nn.Module):
         num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
         v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
 
-        out = self.project_out(v.transpose(-2, -1).contiguous())
-        return out
+        return v.transpose(-2, -1).contiguous()
 
 
 # Gated Feed-forward
 class GF(nn.Module):
-    def __init__(self, feat_dim):
+    def __init__(self, feat_dim, out_dim):
         super(GF, self).__init__()
-
-        self.project_in = nn.Conv1d(feat_dim, feat_dim * 2, kernel_size=1, bias=False)
-        self.conv = nn.Conv1d(feat_dim * 2, feat_dim * 2, kernel_size=3, padding=1, groups=feat_dim * 2, bias=False)
-        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
+        self.conv = nn.Conv1d(feat_dim, out_dim, kernel_size=1)
 
     def forward(self, x):
-        x1, x2 = self.conv(self.project_in(x)).chunk(2, dim=1)
-        x = self.project_out(F.gelu(x1) * x2)
-        return x
+        return self.conv(x)
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, feat_dim, factor):
+    def __init__(self, feat_dim, out_dim, factor):
         super(TransformerBlock, self).__init__()
 
         self.norm1 = nn.LayerNorm(feat_dim)
         self.attn = GA(feat_dim, factor)
         self.norm2 = nn.LayerNorm(feat_dim)
-        self.ffn = GF(feat_dim)
+        self.ffn = GF(feat_dim, out_dim)
 
     def forward(self, x):
-        x = x + self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
-        x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        x = self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        x = self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         return x
 
 
@@ -68,15 +61,12 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.factor = factor
-        self.cas_branch = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False), nn.ReLU(),
-                                        # TransformerBlock(hidden_dim, factor),
-                                        nn.Conv1d(hidden_dim, num_classes, kernel_size=1))
-        self.sas_rgb = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=3, padding=1, bias=False), nn.ReLU(),
-                                     # TransformerBlock(hidden_dim, factor),
-                                     nn.Conv1d(hidden_dim, 1, kernel_size=1))
-        self.sas_flow = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=3, padding=1, bias=False), nn.ReLU(),
-                                      # TransformerBlock(hidden_dim, factor),
-                                      nn.Conv1d(hidden_dim, 1, kernel_size=1))
+        self.cas_branch = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=1), nn.ReLU(),
+                                        TransformerBlock(hidden_dim, num_classes, factor))
+        self.sas_rgb = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=1), nn.ReLU(),
+                                     TransformerBlock(hidden_dim, 1, factor))
+        self.sas_flow = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=1), nn.ReLU(),
+                                      TransformerBlock(hidden_dim, 1, factor))
 
     def forward(self, x):
         # [N, L, C], class activation sequence
