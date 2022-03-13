@@ -56,7 +56,7 @@ class TransformerBlock(nn.Module):
         self.ffn = GF(feat_dim)
 
     def forward(self, x):
-        x = x + self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        x = self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         return x
 
