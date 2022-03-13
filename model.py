@@ -16,18 +16,18 @@ class GA(nn.Module):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
         q, k, v = F.normalize(q, dim=1), F.normalize(k, dim=1), v.transpose(-2, -1).contiguous()
         # [N, L, L]
-        attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
-        min_attn = torch.amin(attn, dim=-1, keepdim=True)
-        max_attn = torch.amax(attn, dim=-1, keepdim=True)
-        attn = (attn - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
-
-        # ref: Graph Convolutional Networks for Temporal Action Localization (ICCV 2019)
-        attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
-        top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
-        min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
-        attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
-        num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
-        v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
+        # attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
+        # min_attn = torch.amin(attn, dim=-1, keepdim=True)
+        # max_attn = torch.amax(attn, dim=-1, keepdim=True)
+        # attn = (attn - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
+        #
+        # # ref: Graph Convolutional Networks for Temporal Action Localization (ICCV 2019)
+        # attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
+        # top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
+        # min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
+        # attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
+        # num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
+        # v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
 
         out = self.project_out(v.transpose(-2, -1).contiguous())
         return out
@@ -64,28 +64,23 @@ class TransformerBlock(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, hidden_dim, factor, temperature):
+    def __init__(self, num_classes, hidden_dim, factor):
         super(Model, self).__init__()
 
         self.factor = factor
-        self.temperature = temperature
-        self.encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
-                                     TransformerBlock(hidden_dim, factor))
-        self.proxies = nn.Parameter(torch.randn(1, hidden_dim, num_classes))
-        self.drop = nn.Dropout(p=0.5)
+        self.cas_branch = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False), nn.ReLU(),
+                                        nn.Conv1d(in_channels=hidden_dim, out_channels=num_classes, kernel_size=1))
+        self.sas_branch = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False), nn.ReLU(),
+                                        nn.Conv1d(in_channels=hidden_dim, out_channels=1, kernel_size=1))
 
     def forward(self, x):
-        # [N, L, D]
-        feat = self.drop(self.encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous())
         # [N, L, C], class activation sequence
-        cas = torch.matmul(F.normalize(feat, dim=-1), F.normalize(self.proxies, dim=1)).div(self.temperature)
+        cas = self.cas_branch(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         cas_score = torch.softmax(cas, dim=-1)
 
         # [N, L, 1], segment activation sequence
-        sas = torch.norm(feat, p=2, dim=-1, keepdim=True)
-        min_norm = torch.amin(sas, dim=1, keepdim=True)
-        max_norm = torch.amax(sas, dim=1, keepdim=True)
-        sas_score = (sas - min_norm) / torch.where(torch.eq(max_norm, 0.0), torch.ones_like(max_norm), max_norm)
+        sas = self.sas_branch(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        sas_score = torch.sigmoid(sas)
 
         seg_score = (cas_score + sas_score) / 2
 
