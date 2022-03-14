@@ -51,26 +51,30 @@ class Model(nn.Module):
 
         self.factor = factor
         self.cas_branch = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=1),
-                                        TransformerBlock(hidden_dim, factor),
-                                        nn.Conv1d(hidden_dim, num_classes, kernel_size=1))
+                                        TransformerBlock(hidden_dim, factor))
         self.sas_rgb = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=1),
-                                     TransformerBlock(hidden_dim, factor),
-                                     nn.Conv1d(hidden_dim, 1, kernel_size=1))
+                                     TransformerBlock(hidden_dim, factor))
         self.sas_flow = nn.Sequential(nn.Conv1d(1024, hidden_dim, kernel_size=1),
-                                      TransformerBlock(hidden_dim, factor),
-                                      nn.Conv1d(hidden_dim, 1, kernel_size=1))
+                                      TransformerBlock(hidden_dim, factor))
+        self.cas_proxies = nn.Parameter(torch.randn(1, hidden_dim, num_classes))
+        self.rgb_proxies = nn.Parameter(torch.randn(1, hidden_dim, 1))
+        self.flow_proxies = nn.Parameter(torch.randn(1, hidden_dim, 1))
         self.temperature = temperature
 
     def forward(self, x):
+        # [N, L, D]
+        cas_feat = self.cas_branch(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         # [N, L, C], class activation sequence
-        cas = self.cas_branch(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        cas = torch.matmul(F.normalize(cas_feat, dim=-1), F.normalize(self.cas_proxies, dim=1)).div(self.temperature)
         cas_score = torch.softmax(cas, dim=-1)
 
+        sas_rgb_feat = self.sas_rgb(x[:, :, :1024].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         # [N, L, 1], segment activation sequence
-        sas_rgb = self.sas_rgb(x[:, :, :1024].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        sas_rgb_score = torch.sigmoid(sas_rgb)
-        sas_flow = self.sas_flow(x[:, :, 1024:].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
-        sas_flow_score = torch.sigmoid(sas_flow)
+        sas_rgb = torch.matmul(F.normalize(sas_rgb_feat, dim=-1), F.normalize(self.rgb_proxies, dim=1))
+        sas_rgb_score = (sas_rgb + 1.0) / 2
+        sas_flow_feat = self.sas_flow(x[:, :, 1024:].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
+        sas_flow = torch.matmul(F.normalize(sas_flow_feat, dim=-1), F.normalize(self.flow_proxies, dim=1))
+        sas_flow_score = (sas_flow + 1.0) / 2
 
         seg_score = (cas_score + sas_rgb_score + sas_flow_score) / 3
 
