@@ -63,7 +63,7 @@ class Model(nn.Module):
 
     def forward(self, x):
         # [N, L, C], class activation sequence
-        cas = self.cas_branch(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous().div(self.temperature)
+        cas = self.cas_branch(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         cas_score = torch.softmax(cas, dim=-1)
 
         # [N, L, 1], segment activation sequence
