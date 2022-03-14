@@ -71,10 +71,10 @@ class Model(nn.Module):
         sas_rgb_feat = self.sas_rgb(x[:, :, :1024].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         # [N, L, 1], segment activation sequence
         sas_rgb = torch.matmul(F.normalize(sas_rgb_feat, dim=-1), F.normalize(self.rgb_proxies, dim=1))
-        sas_rgb_score = (sas_rgb + 1.0) / 2
+        sas_rgb_score = sas_rgb.add(1.0).div(2)
         sas_flow_feat = self.sas_flow(x[:, :, 1024:].transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous()
         sas_flow = torch.matmul(F.normalize(sas_flow_feat, dim=-1), F.normalize(self.flow_proxies, dim=1))
-        sas_flow_score = (sas_flow + 1.0) / 2
+        sas_flow_score = sas_flow.add(1.0).div(2)
 
         seg_score = (cas_score + sas_rgb_score + sas_flow_score) / 3
 
