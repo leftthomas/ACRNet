@@ -50,8 +50,6 @@ class GA(nn.Module):
         top_attn = torch.topk(graph, k=max(graph.shape[1] // self.factor, 1), dim=-1)[0]
         min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
         graph = torch.where(torch.ge(graph, min_attn), graph, torch.zeros_like(graph))
-        # threshold
-        graph = F.threshold(graph, threshold=0.85, value=0.0)
         # row-normalized
         sum_attn = torch.sum(graph, dim=-1, keepdim=True)
         sum_attn = torch.where(torch.eq(sum_attn, 0.0), torch.ones_like(sum_attn), sum_attn)
@@ -83,12 +81,12 @@ class TransformerBlock(nn.Module):
 
         self.norm1 = nn.LayerNorm(feat_dim)
         self.attn = GA(feat_dim, factor)
-        self.norm2 = nn.LayerNorm(feat_dim)
-        self.ffn = GF(feat_dim)
+        # self.norm2 = nn.LayerNorm(feat_dim)
+        # self.ffn = GF(feat_dim)
 
     def forward(self, x):
         x, graph = self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
-        x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        # x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         return x, graph
 
 
@@ -124,7 +122,7 @@ class Model(nn.Module):
         # [N, C], action classification score is aggregated by cas
         act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
         bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
-        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score, graph
+        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score, graph, feat
 
 
 def sas_label(act_index, num_seg, label):
@@ -159,3 +157,12 @@ def generalized_cross_entropy(score, label, q=0.7, eps=1e-8):
     pos_loss = ((((1.0 - (score + eps) ** q) / q) * label).sum(dim=-1) / pos_num).mean(dim=0)
     neg_loss = ((((1.0 - (1.0 - score + eps) ** q) / q) * (1.0 - label)).sum(dim=-1) / neg_num).mean(dim=0)
     return pos_loss + neg_loss
+
+
+def graph_loss(graph, feat):
+    loss = 0.0
+    for i in range(graph.shape[0]):
+        for j in range(graph.shape[1]):
+            feats = feat[i][torch.nonzero(graph[i][j]).squeeze(dim=-1), :]
+            loss = loss + ((feat[i][j, :].unsqueeze(dim=0) - feats) ** 2).mean()
+    return loss / (graph.shape[0] * graph.shape[1])
