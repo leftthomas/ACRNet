@@ -15,30 +15,29 @@ class GA(nn.Module):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
         q, k, v = F.normalize(q, dim=1), F.normalize(k, dim=1), v.transpose(-2, -1).contiguous()
         # [N, L, L]
-        sim_graph = torch.matmul(q.transpose(-2, -1).contiguous(), k)
-        sum_val = sim_graph.sum(dim=-1, keepdim=True)
-        sim_graph = sim_graph.div(torch.where(torch.eq(sum_val, 0.0), torch.ones_like(sum_val), sum_val))
+        attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
+        min_attn = torch.amin(attn, dim=-1, keepdim=True)
+        max_attn = torch.amax(attn, dim=-1, keepdim=True)
+        attn = (attn - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
 
-        diff_graph = torch.arange(v.shape[1], device=sim_graph.device).unsqueeze(dim=0)
-        diff_graph = diff_graph.sub(torch.arange(v.shape[1], device=sim_graph.device).unsqueeze(dim=-1))
-        diff_graph = torch.abs(diff_graph)
-        diff_graph = diff_graph.div(diff_graph.sum(dim=-1, keepdim=True))
-        diff_graph = torch.diagonal_scatter(diff_graph, torch.ones(diff_graph.shape[-1], device=diff_graph.device))
-        diff_graph = torch.reciprocal(diff_graph)
-        diff_graph = torch.diagonal_scatter(diff_graph, torch.zeros(diff_graph.shape[-1], device=diff_graph.device))
-        diff_graph = diff_graph.div(diff_graph.sum(dim=-1, keepdim=True))
-        diff_graph = torch.diagonal_scatter(diff_graph, torch.ones(diff_graph.shape[-1], device=diff_graph.device))
+        # diff_graph = torch.arange(v.shape[1], device=sim_graph.device).unsqueeze(dim=0)
+        # diff_graph = diff_graph.sub(torch.arange(v.shape[1], device=sim_graph.device).unsqueeze(dim=-1))
+        # diff_graph = torch.abs(diff_graph)
+        # diff_graph = diff_graph.div(diff_graph.sum(dim=-1, keepdim=True))
+        # diff_graph = torch.diagonal_scatter(diff_graph, torch.ones(diff_graph.shape[-1], device=diff_graph.device))
+        # diff_graph = torch.reciprocal(diff_graph)
+        # diff_graph = torch.diagonal_scatter(diff_graph, torch.zeros(diff_graph.shape[-1], device=diff_graph.device))
+        # diff_graph = diff_graph.div(diff_graph.sum(dim=-1, keepdim=True))
+        # diff_graph = torch.diagonal_scatter(diff_graph, torch.ones(diff_graph.shape[-1], device=diff_graph.device))
 
         # ref: Graph Convolutional Networks for Temporal Action Localization (ICCV 2019)
-        graph = (sim_graph + diff_graph.unsqueeze(dim=0)) / 2
-        graph = torch.diagonal_scatter(graph, torch.zeros(graph.shape[:-1], device=graph.device), dim1=-2, dim2=-1)
-
-        top_attn = torch.topk(graph, k=max(graph.shape[-1] // self.factor, 1), dim=-1)[0]
+        # graph = (sim_graph + diff_graph.unsqueeze(dim=0)) / 2
+        attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
+        top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
         min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
-        graph = torch.where(torch.ge(graph, min_attn), graph, torch.zeros_like(graph))
-        sum_val = graph.sum(dim=-1, keepdim=True)
-        graph = graph.div(torch.where(torch.eq(sum_val, 0.0), torch.ones_like(sum_val), sum_val))
-        v = torch.matmul(graph, v) + v
+        attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
+        num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
+        v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
 
         return v.transpose(-2, -1).contiguous()
 
