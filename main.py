@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, sas_label, cross_entropy, generalized_cross_entropy, graph_loss
+from model import Model, sas_label, cross_entropy, generalized_cross_entropy
 from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred
 
 
@@ -21,9 +21,9 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, _, _, _, seg_score, matrix, _ = net(data)
-            # [C],  [T, C]
-            act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
+            act_score, _, _, _, seg_score, matrix = net(data)
+            # [C],  [T, C],  [T, T]
+            act_score, seg_score, matrix = act_score.squeeze(0), seg_score.squeeze(0), matrix.squeeze(0)
 
             pred = torch.ge(act_score, args.cls_th)
             num_correct += 1 if torch.equal(gt, pred.float()) else 0
@@ -54,8 +54,9 @@ def test_loop(net, data_loader, num_iter):
                                                 high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
             if args.save_vis:
                 # draw the pred to vis
-                draw_pred(frame_score, proposal_dict, data_loader.dataset.annotations, data_loader.dataset.idx_to_class,
-                          data_loader.dataset.class_to_idx, video_name, args.fps, args.save_path, args.data_name)
+                draw_pred(frame_score, proposal_dict, matrix.cpu().numpy(), data_loader.dataset.annotations,
+                          data_loader.dataset.idx_to_class, data_loader.dataset.class_to_idx, video_name, args.fps,
+                          args.save_path, args.data_name)
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total
@@ -123,11 +124,10 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, bkg_score, sas_score, act_index, _, graph, feature = model(feat)
+            action_score, bkg_score, sas_score, act_index, _, graph = model(feat)
             cas_loss = cross_entropy(action_score, bkg_score, label)
             sas_loss = generalized_cross_entropy(sas_score, sas_label(act_index, args.num_seg, label))
-            feat_loss = graph_loss(graph, feature)
-            loss = cas_loss + sas_loss + feat_loss
+            loss = cas_loss + sas_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

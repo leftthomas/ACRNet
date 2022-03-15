@@ -81,12 +81,12 @@ class TransformerBlock(nn.Module):
 
         self.norm1 = nn.LayerNorm(feat_dim)
         self.attn = GA(feat_dim, factor)
-        # self.norm2 = nn.LayerNorm(feat_dim)
-        # self.ffn = GF(feat_dim)
+        self.norm2 = nn.LayerNorm(feat_dim)
+        self.ffn = GF(feat_dim)
 
     def forward(self, x):
         x, graph = self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
-        # x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         return x, graph
 
 
@@ -122,7 +122,7 @@ class Model(nn.Module):
         # [N, C], action classification score is aggregated by cas
         act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
         bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
-        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score, graph, feat
+        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score, graph
 
 
 def sas_label(act_index, num_seg, label):
@@ -158,11 +158,3 @@ def generalized_cross_entropy(score, label, q=0.7, eps=1e-8):
     neg_loss = ((((1.0 - (1.0 - score + eps) ** q) / q) * (1.0 - label)).sum(dim=-1) / neg_num).mean(dim=0)
     return pos_loss + neg_loss
 
-
-def graph_loss(graph, feat):
-    loss = 0.0
-    for i in range(graph.shape[0]):
-        for j in range(graph.shape[1]):
-            feats = feat[i][torch.nonzero(graph[i][j]).squeeze(dim=-1), :]
-            loss = loss + ((feat[i][j, :].unsqueeze(dim=0) - feats) ** 2).mean()
-    return loss / (graph.shape[0] * graph.shape[1])
