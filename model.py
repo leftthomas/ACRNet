@@ -15,10 +15,10 @@ class GA(nn.Module):
         q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
         q, k, v = F.normalize(q, dim=1), F.normalize(k, dim=1), v.transpose(-2, -1).contiguous()
         # [N, L, L]
-        attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
-        min_attn = torch.amin(attn, dim=-1, keepdim=True)
-        max_attn = torch.amax(attn, dim=-1, keepdim=True)
-        attn = (attn - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
+        # attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
+        # min_attn = torch.amin(attn, dim=-1, keepdim=True)
+        # max_attn = torch.amax(attn, dim=-1, keepdim=True)
+        # attn = (attn - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
 
         # diff_graph = torch.arange(v.shape[1], device=sim_graph.device).unsqueeze(dim=0)
         # diff_graph = diff_graph.sub(torch.arange(v.shape[1], device=sim_graph.device).unsqueeze(dim=-1))
@@ -32,14 +32,34 @@ class GA(nn.Module):
 
         # ref: Graph Convolutional Networks for Temporal Action Localization (ICCV 2019)
         # graph = (sim_graph + diff_graph.unsqueeze(dim=0)) / 2
-        attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
-        top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
-        min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
-        attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
-        num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
-        v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
+        # attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
+        # top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
+        # min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
+        # attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
+        # num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
+        # v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
 
-        return v.transpose(-2, -1).contiguous()
+        # ref: ACGNet: Action Complement Graph Network for Weakly-supervised Temporal Action Localization (AAAI 2022)
+        z = 10.0
+        sim_graph = torch.matmul(q.transpose(-2, -1).contiguous(), k)
+        diff_graph = torch.arange(sim_graph.shape[1], device=sim_graph.device).unsqueeze(dim=0)
+        diff_graph = diff_graph.sub(torch.arange(sim_graph.shape[1], device=sim_graph.device).unsqueeze(dim=-1))
+        diff_graph = 1.0 - torch.relu(z - torch.abs(diff_graph)).div(z)
+        graph = (sim_graph + diff_graph.unsqueeze(dim=0)).div(2.0)
+        # select top k
+        top_attn = torch.topk(graph, k=max(graph.shape[1] // self.factor, 1), dim=-1)[0]
+        min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
+        graph = torch.where(torch.ge(graph, min_attn), graph, torch.zeros_like(graph))
+        # threshold
+        graph = F.threshold(graph, threshold=0.85, value=0.0)
+        # row-normalized
+        sum_attn = torch.sum(graph, dim=-1, keepdim=True)
+        sum_attn = torch.where(torch.eq(sum_attn, 0.0), torch.ones_like(sum_attn), sum_attn)
+        graph = graph.div(sum_attn)
+        # graph average
+        v = torch.matmul(graph, v) + v
+
+        return v.transpose(-2, -1).contiguous(), graph
 
 
 # Gated Feed-forward
@@ -67,9 +87,9 @@ class TransformerBlock(nn.Module):
         self.ffn = GF(feat_dim)
 
     def forward(self, x):
-        x = self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        x, graph = self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
-        return x
+        return x, graph
 
 
 class Model(nn.Module):
@@ -84,8 +104,9 @@ class Model(nn.Module):
         self.drop = nn.Dropout(p=0.5)
 
     def forward(self, x):
+        feat, graph = self.encoder(x.transpose(-1, -2).contiguous())
         # [N, L, D]
-        feat = self.drop(self.encoder(x.transpose(-1, -2).contiguous()).transpose(-1, -2).contiguous())
+        feat = self.drop(feat.transpose(-1, -2).contiguous())
         # [N, L, C], class activation sequence
         cas = torch.matmul(F.normalize(feat, dim=-1), F.normalize(self.proxies, dim=1)).div(self.temperature)
         cas_score = torch.softmax(cas, dim=-1)
@@ -103,7 +124,7 @@ class Model(nn.Module):
         # [N, C], action classification score is aggregated by cas
         act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
         bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
-        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score
+        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score, graph
 
 
 def sas_label(act_index, num_seg, label):
