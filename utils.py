@@ -124,7 +124,7 @@ def oic_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
     return score
 
 
-def draw_pred(frame_scores, proposal_dict, graph, gt_dicts, idx_to_class, class_to_idx, video_name,
+def draw_pred(frame_scores, graph, score_th, gt_dicts, idx_to_class, class_to_idx, video_name,
               fps, save_path, data_name):
     frame_indexes = np.arange(0, frame_scores.shape[0])
     color_palette = sns.color_palette('deep', n_colors=len(idx_to_class))
@@ -136,9 +136,11 @@ def draw_pred(frame_scores, proposal_dict, graph, gt_dicts, idx_to_class, class_
     ax4 = plt.subplot2grid((3, 3), (1, 2), rowspan=2)
 
     gt_list = gt_dicts['d_{}'.format(video_name)]['annotations']
+    true_labels = set()
     for gt in gt_list:
         start, end = gt['segment']
         label = gt['label']
+        true_labels.add(class_to_idx[label])
         # change second to frame index
         start, end = int(start * fps - 1), int(end * fps - 2)
         count = np.zeros(frame_scores.shape[0])
@@ -146,15 +148,16 @@ def draw_pred(frame_scores, proposal_dict, graph, gt_dicts, idx_to_class, class_
         ax1.fill_between(frame_indexes, count, color=color_palette[class_to_idx[label]], label=label)
     ax1.set_ylabel('GT')
 
-    for class_id, proposal_list in proposal_dict.items():
-        ax3.plot(frame_indexes, frame_scores[:, class_id], color=color_palette[class_id],
-                 label=idx_to_class[class_id])
-        for proposal in proposal_list:
-            # change second to frame index
-            start, end = int(proposal[0] * fps - 1), int(proposal[1] * fps - 2)
-            count = np.zeros(frame_scores.shape[0])
-            count[start:end] = 1
-            ax2.fill_between(frame_indexes, count, color=color_palette[class_id], label=idx_to_class[class_id])
+    for class_id in true_labels:
+        ax3.plot(frame_indexes, frame_scores[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
+        # only draw the proposal which score is high
+        proposals = grouping(np.where(frame_scores[:, class_id] >= score_th)[0])
+        for proposal in proposals:
+            if len(proposal) >= 2:
+                start, end = proposal[0], proposal[-1]
+                count = np.zeros(frame_scores.shape[0])
+                count[start:end] = 1
+                ax2.fill_between(frame_indexes, count, color=color_palette[class_id], label=idx_to_class[class_id])
     ax2.set_ylabel('Pred')
     ax3.set_ylabel('CAS')
 

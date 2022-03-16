@@ -54,7 +54,7 @@ def test_loop(net, data_loader, num_iter):
                                                 high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
             if args.save_vis:
                 # draw the pred to vis
-                draw_pred(frame_score, proposal_dict, matrix.cpu().numpy(), data_loader.dataset.annotations,
+                draw_pred(frame_score, matrix.cpu().numpy(), args.cls_th, data_loader.dataset.annotations,
                           data_loader.dataset.idx_to_class, data_loader.dataset.class_to_idx, video_name, args.fps,
                           args.save_path, args.data_name)
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)
