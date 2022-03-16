@@ -124,16 +124,18 @@ def oic_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
     return score
 
 
-def draw_pred(frame_scores, graph, score_th, gt_dicts, idx_to_class, class_to_idx, video_name,
+def draw_pred(frame_score, cas_score, sas_score, graph, score_th, gt_dicts, idx_to_class, class_to_idx, video_name,
               fps, save_path, data_name):
-    frame_indexes = np.arange(0, frame_scores.shape[0])
+    frame_indexes = np.arange(0, frame_score.shape[0])
     color_palette = sns.color_palette('deep', n_colors=len(idx_to_class))
 
     fig = plt.figure(figsize=(7, 3))
-    ax1 = plt.subplot2grid((3, 3), (0, 0), colspan=2)
-    ax2 = plt.subplot2grid((3, 3), (1, 0), colspan=2)
-    ax3 = plt.subplot2grid((3, 3), (2, 0), colspan=2)
-    ax4 = plt.subplot2grid((3, 3), (1, 2), rowspan=2)
+    ax1 = plt.subplot2grid((5, 3), (0, 0), colspan=2)
+    ax2 = plt.subplot2grid((5, 3), (1, 0), colspan=2)
+    ax3 = plt.subplot2grid((5, 3), (2, 0), colspan=2)
+    ax4 = plt.subplot2grid((5, 3), (3, 0), colspan=2)
+    ax5 = plt.subplot2grid((5, 3), (4, 0), colspan=2)
+    ax6 = plt.subplot2grid((5, 3), (2, 2), rowspan=3)
 
     gt_list = gt_dicts['d_{}'.format(video_name)]['annotations']
     true_labels = set()
@@ -143,37 +145,41 @@ def draw_pred(frame_scores, graph, score_th, gt_dicts, idx_to_class, class_to_id
         true_labels.add(class_to_idx[label])
         # change second to frame index
         start, end = int(start * fps - 1), int(end * fps - 2)
-        count = np.zeros(frame_scores.shape[0])
+        count = np.zeros(frame_score.shape[0])
         count[start:end] = 1
         ax1.fill_between(frame_indexes, count, color=color_palette[class_to_idx[label]], label=label)
     ax1.set_ylabel('GT')
 
     for class_id in true_labels:
-        ax3.plot(frame_indexes, frame_scores[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
+        ax3.plot(frame_indexes, frame_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
+        ax4.plot(frame_indexes, cas_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
         # only draw the proposal which score is high
-        proposals = grouping(np.where(frame_scores[:, class_id] >= score_th)[0])
+        proposals = grouping(np.where(frame_score[:, class_id] >= score_th)[0])
         for proposal in proposals:
             if len(proposal) >= 2:
                 start, end = proposal[0], proposal[-1]
-                count = np.zeros(frame_scores.shape[0])
+                count = np.zeros(frame_score.shape[0])
                 count[start:end] = 1
                 ax2.fill_between(frame_indexes, count, color=color_palette[class_id], label=idx_to_class[class_id])
     ax2.set_ylabel('Pred')
-    ax3.set_ylabel('CAS')
+    ax3.set_ylabel('FAS')
+    ax4.set_ylabel('CAS')
+    ax5.plot(frame_indexes, sas_score)
+    ax5.set_ylabel('SAS')
 
-    im = ax4.imshow(graph, interpolation='nearest')
-    fig.colorbar(im, ax=ax4, fraction=0.045, pad=0.05)
-    ax4.set(xticks=[], yticks=[])
+    im = ax6.imshow(graph, interpolation='nearest')
+    fig.colorbar(im, ax=ax6, fraction=0.045, pad=0.05)
+    ax6.set(xticks=[], yticks=[])
 
-    plt.setp([ax1, ax2, ax3], xticks=[], yticks=[], xlim=(0, frame_scores.shape[0]), ylim=(0, 1))
+    plt.setp([ax1, ax2, ax3, ax4, ax5], xticks=[], yticks=[], xlim=(0, frame_score.shape[0]), ylim=(0, 1))
     lines, labels = [], []
-    for ax in [ax1, ax2, ax3]:
+    for ax in [ax1, ax2, ax3, ax4, ax5]:
         ax_lines, ax_labels = ax.get_legend_handles_labels()
         for line, label in zip(ax_lines, ax_labels):
             if label not in labels:
                 lines.append(line)
                 labels.append(label)
-    fig.legend(lines, labels, loc=2, bbox_to_anchor=(0.66, 0.9))
+    fig.legend(lines, labels, loc=2, bbox_to_anchor=(0.67, 0.9))
 
     save_name = '{}/{}/{}.pdf'.format(save_path, data_name, video_name)
     if not os.path.exists(os.path.dirname(save_name)):

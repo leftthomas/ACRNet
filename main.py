@@ -21,9 +21,11 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, _, _, _, seg_score, matrix = net(data)
-            # [C],  [T, C],  [T, T]
-            act_score, seg_score, matrix = act_score.squeeze(0), seg_score.squeeze(0), matrix.squeeze(0)
+            act_score, bkg_score, cas_score, sas_score, seg_score, _, graph = net(data)
+            # [C],  [T, C],  [T]
+            act_score, cas_score, sas_score = act_score.squeeze(0), cas_score.squeeze(0), sas_score.squeeze(0)
+            # [T, C],  [T]
+            seg_score, graph = seg_score.squeeze(0), graph.squeeze(0).cpu().numpy()
 
             pred = torch.ge(act_score, args.cls_th)
             num_correct += 1 if torch.equal(gt, pred.float()) else 0
@@ -32,6 +34,11 @@ def test_loop(net, data_loader, num_iter):
             frame_score = revert_frame(seg_score.cpu().numpy(), args.rate * num_seg.item())
             # make sure the score between [0, 1]
             frame_score = np.clip(frame_score, a_min=0.0, a_max=1.0)
+
+            cas_score = revert_frame(cas_score.cpu().numpy(), args.rate * num_seg.item())
+            cas_score = np.clip(cas_score, a_min=0.0, a_max=1.0)
+            sas_score = revert_frame(sas_score.cpu().numpy(), args.rate * num_seg.item())
+            sas_score = np.clip(sas_score, a_min=0.0, a_max=1.0)
 
             proposal_dict = {}
             for i, status in enumerate(pred):
@@ -54,7 +61,7 @@ def test_loop(net, data_loader, num_iter):
                                                 high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
             if args.save_vis:
                 # draw the pred to vis
-                draw_pred(frame_score, matrix.cpu().numpy(), args.cls_th, data_loader.dataset.annotations,
+                draw_pred(frame_score, cas_score, sas_score, graph, args.cls_th, data_loader.dataset.annotations,
                           data_loader.dataset.idx_to_class, data_loader.dataset.class_to_idx, video_name, args.fps,
                           args.save_path, args.data_name)
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)
@@ -124,9 +131,9 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, bkg_score, sas_score, act_index, _, graph = model(feat)
-            cas_loss = cross_entropy(action_score, bkg_score, label)
-            sas_loss = generalized_cross_entropy(sas_score, sas_label(act_index, args.num_seg, label))
+            act_scores, bkg_scores, cas_scores, sas_scores, seg_scores, act_index, graphs = model(feat)
+            cas_loss = cross_entropy(act_scores, bkg_scores, label)
+            sas_loss = generalized_cross_entropy(sas_scores, sas_label(act_index, args.num_seg, label))
             loss = cas_loss + sas_loss
             optimizer.zero_grad()
             loss.backward()

@@ -8,12 +8,12 @@ class GA(nn.Module):
     def __init__(self, feat_dim, factor):
         super(GA, self).__init__()
         self.factor = factor
-        self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1, bias=False)
-        self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3, bias=False)
+        # self.kv = nn.Conv1d(feat_dim, feat_dim * 2, kernel_size=1, bias=False)
+        # self.kv_conv = nn.Conv1d(feat_dim * 2, feat_dim * 2, kernel_size=3, padding=1, groups=feat_dim * 2, bias=False)
 
     def forward(self, x):
-        q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
-        q, k, v = F.normalize(q, dim=1), F.normalize(k, dim=1), v.transpose(-2, -1).contiguous()
+        # k, v = self.kv_conv(self.kv(x)).chunk(2, dim=1)
+        x, v = F.normalize(x, dim=1), x.transpose(-2, -1).contiguous()
         # [N, L, L]
         # attn = torch.matmul(q.transpose(-2, -1).contiguous(), k)
         # min_attn = torch.amin(attn, dim=-1, keepdim=True)
@@ -40,12 +40,8 @@ class GA(nn.Module):
         # v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
 
         # ref: ACGNet: Action Complement Graph Network for Weakly-supervised Temporal Action Localization (AAAI 2022)
-        z = 10.0
-        sim_graph = torch.matmul(q.transpose(-2, -1).contiguous(), k)
-        diff_graph = torch.arange(sim_graph.shape[1], device=sim_graph.device).unsqueeze(dim=0)
-        diff_graph = diff_graph.sub(torch.arange(sim_graph.shape[1], device=sim_graph.device).unsqueeze(dim=-1))
-        diff_graph = 1.0 - torch.relu(z - torch.abs(diff_graph)).div(z)
-        graph = (sim_graph + diff_graph.unsqueeze(dim=0)).div(2.0)
+        sim_graph = torch.matmul(x.transpose(-2, -1).contiguous(), x)
+        graph = sim_graph
         # select top k
         top_attn = torch.topk(graph, k=max(graph.shape[1] // self.factor, 1), dim=-1)[0]
         min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
@@ -57,7 +53,7 @@ class GA(nn.Module):
         # graph average
         v = torch.matmul(graph, v) + v
 
-        return v.transpose(-2, -1).contiguous(), graph
+        return v.transpose(-2, -1).contiguous(), sim_graph
 
 
 # Gated Feed-forward
@@ -79,14 +75,14 @@ class TransformerBlock(nn.Module):
     def __init__(self, feat_dim, factor):
         super(TransformerBlock, self).__init__()
 
-        self.norm1 = nn.LayerNorm(feat_dim)
+        # self.norm1 = nn.LayerNorm(feat_dim)
         self.attn = GA(feat_dim, factor)
-        self.norm2 = nn.LayerNorm(feat_dim)
-        self.ffn = GF(feat_dim)
+        # self.norm2 = nn.LayerNorm(feat_dim)
+        # self.ffn = GF(feat_dim)
 
     def forward(self, x):
-        x, graph = self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
-        x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
+        x, graph = self.attn(x)
+        # x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
         return x, graph
 
 
@@ -99,12 +95,12 @@ class Model(nn.Module):
         self.encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
                                      TransformerBlock(hidden_dim, factor))
         self.proxies = nn.Parameter(torch.randn(1, hidden_dim, num_classes))
-        self.drop = nn.Dropout(p=0.5)
+        # self.drop = nn.Dropout(p=0.5)
 
     def forward(self, x):
         feat, graph = self.encoder(x.transpose(-1, -2).contiguous())
         # [N, L, D]
-        feat = self.drop(feat.transpose(-1, -2).contiguous())
+        feat = feat.transpose(-1, -2).contiguous()
         # [N, L, C], class activation sequence
         cas = torch.matmul(F.normalize(feat, dim=-1), F.normalize(self.proxies, dim=1)).div(self.temperature)
         cas_score = torch.softmax(cas, dim=-1)
@@ -122,7 +118,7 @@ class Model(nn.Module):
         # [N, C], action classification score is aggregated by cas
         act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
         bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
-        return act_score, bkg_score, sas_score.squeeze(dim=-1), act_index, seg_score, graph
+        return act_score, bkg_score, cas_score, sas_score.squeeze(dim=-1), seg_score, act_index, graph
 
 
 def sas_label(act_index, num_seg, label):
