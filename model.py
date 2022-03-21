@@ -21,7 +21,7 @@ class GA(nn.Module):
         attn = (graph - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
 
         attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
-        top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
+        top_attn = torch.topk(attn, k=min(attn.shape[-1] // self.factor, 1), dim=-1)[0]
         min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
         attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
         num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
@@ -87,8 +87,8 @@ class Model(nn.Module):
 
         seg_score = (cas_score + sas_score) / 2
 
-        act_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1)[1]
-        bkg_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1, largest=False)[1]
+        act_index = seg_score.topk(k=min(seg_score.shape[1] // self.factor, 1), dim=1)[1]
+        bkg_index = seg_score.topk(k=min(seg_score.shape[1] // self.factor, 1), dim=1, largest=False)[1]
         # [N, C], action classification score is aggregated by cas
         act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
         bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
