@@ -3,127 +3,97 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# Graph Attention
-class GA(nn.Module):
-    def __init__(self, feat_dim, factor):
-        super(GA, self).__init__()
-        self.factor = factor
-        self.qkv = nn.Conv1d(feat_dim, feat_dim * 3, kernel_size=1, bias=False)
-        self.qkv_conv = nn.Conv1d(feat_dim * 3, feat_dim * 3, kernel_size=3, padding=1, groups=feat_dim * 3, bias=False)
-
-    def forward(self, x):
-        q, k, v = self.qkv_conv(self.qkv(x)).chunk(3, dim=1)
-        q, k, v = F.normalize(q, dim=1), F.normalize(k, dim=1), v.transpose(-2, -1).contiguous()
-        # [N, L, L]
-        graph = torch.matmul(q.transpose(-2, -1).contiguous(), k)
-        min_attn = torch.amin(graph, dim=-1, keepdim=True)
-        max_attn = torch.amax(graph, dim=-1, keepdim=True)
-        attn = (graph - min_attn) / torch.where(torch.eq(max_attn, 0.0), torch.ones_like(max_attn), max_attn)
-
-        attn = torch.diagonal_scatter(attn, torch.zeros(attn.shape[:-1], device=attn.device), dim1=-2, dim2=-1)
-        top_attn = torch.topk(attn, k=max(attn.shape[-1] // self.factor, 1), dim=-1)[0]
-        min_attn = torch.amin(top_attn, dim=-1, keepdim=True)
-        attn = torch.where(torch.ge(attn, min_attn), attn, torch.zeros_like(attn))
-        num = torch.count_nonzero(attn, dim=-1).unsqueeze(dim=-1)
-        v = torch.matmul(attn, v) / torch.where(torch.eq(num, 0.0), torch.ones_like(num), num) + v
-
-        return v.transpose(-2, -1).contiguous(), graph
-
-
-# Gated Feed-forward
-class GF(nn.Module):
+# ref: Cross-modal Consensus Network for Weakly Supervised Temporal Action Localization (ACM MM 2021)
+class CCM(nn.Module):
     def __init__(self, feat_dim):
-        super(GF, self).__init__()
+        super(CCM, self).__init__()
+        self.global_context = nn.Sequential(nn.AdaptiveAvgPool1d(1), nn.Conv1d(feat_dim, feat_dim, 3, padding=1),
+                                            nn.ReLU())
+        self.local_context = nn.Sequential(nn.Conv1d(feat_dim, feat_dim, 3, padding=1), nn.ReLU())
 
-        self.project_in = nn.Conv1d(feat_dim, feat_dim * 2, kernel_size=1, bias=False)
-        self.conv = nn.Conv1d(feat_dim * 2, feat_dim * 2, kernel_size=3, padding=1, groups=feat_dim * 2, bias=False)
-        self.project_out = nn.Conv1d(feat_dim, feat_dim, kernel_size=1, bias=False)
-
-    def forward(self, x):
-        x1, x2 = self.conv(self.project_in(x)).chunk(2, dim=1)
-        x = self.project_out(F.gelu(x1) * x2)
-        return x
+    def forward(self, global_feat, local_feat):
+        global_context = self.global_context(global_feat)
+        local_context = self.local_context(local_feat)
+        enhanced_feat = torch.sigmoid(global_context * local_context) * global_feat
+        return enhanced_feat
 
 
-class TransformerBlock(nn.Module):
-    def __init__(self, feat_dim, factor):
-        super(TransformerBlock, self).__init__()
+class AttentionUnit(nn.Module):
+    def __init__(self, feat_dim, hidden_dim):
+        super(AttentionUnit, self).__init__()
+        self.atte = nn.Sequential(nn.Conv1d(feat_dim, hidden_dim, 3, padding=1), nn.ReLU(),
+                                  nn.Conv1d(hidden_dim, hidden_dim, 3, padding=1), nn.ReLU(),
+                                  nn.Conv1d(hidden_dim, 1, 1), nn.Sigmoid())
 
-        self.norm1 = nn.LayerNorm(feat_dim)
-        self.attn = GA(feat_dim, factor)
-        self.norm2 = nn.LayerNorm(feat_dim)
-        self.ffn = GF(feat_dim)
-
-    def forward(self, x):
-        x, graph = self.attn(self.norm1(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
-        x = x + self.ffn(self.norm2(x.transpose(-2, -1).contiguous()).transpose(-2, -1).contiguous())
-        return x, graph
+    def forward(self, feat):
+        return self.atte(feat)
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, hidden_dim, factor, temperature):
+    def __init__(self, num_classes, hidden_dim, factor):
         super(Model, self).__init__()
-
         self.factor = factor
-        self.temperature = temperature
-        self.encoder = nn.Sequential(nn.Conv1d(2048, hidden_dim, kernel_size=3, padding=1, bias=False),
-                                     TransformerBlock(hidden_dim, factor))
-        self.proxies = nn.Parameter(torch.randn(1, hidden_dim, num_classes))
-        self.drop = nn.Dropout(p=0.5)
+        self.rgb_ccm = CCM(1024)
+        self.flow_ccm = CCM(1024)
+        self.rgb_atte = AttentionUnit(1024, hidden_dim)
+        self.flow_atte = AttentionUnit(1024, hidden_dim)
+        self.fusion = nn.Sequential(nn.Conv1d(2048, hidden_dim, 3, padding=1), nn.ReLU())
+        self.cls = nn.Sequential(nn.Conv1d(hidden_dim, hidden_dim, 3, padding=1), nn.ReLU(),
+                                 nn.Conv1d(hidden_dim, num_classes, 1))
+        self.apply(weights_init)
 
     def forward(self, x):
-        feat, graph = self.encoder(x.transpose(-1, -2).contiguous())
-        # [N, L, D]
-        feat = self.drop(feat.transpose(-1, -2).contiguous())
-        # [N, L, C], class activation sequence
-        cas = torch.matmul(F.normalize(feat, dim=-1), F.normalize(self.proxies, dim=1)).div(self.temperature)
+        # [N, D, T]
+        rgb, flow = x[:, :, :1024].transpose(-2, -1).contiguous(), x[:, :, 1024:].transpose(-2, -1).contiguous()
+        rgb_feat = self.rgb_ccm(rgb, flow)
+        flow_feat = self.flow_ccm(flow, rgb)
+        # [N, T, 1]
+        rgb_atte = self.rgb_atte(rgb_feat).transpose(-2, -1).contiguous()
+        flow_atte = self.flow_atte(flow_feat).transpose(-2, -1).contiguous()
+        sas = ((rgb_atte + flow_atte) / 2)
+
+        feat = self.fusion(torch.cat((rgb_feat, flow_feat), dim=1))
+        # [N, T, C]
+        cas = self.cls(feat).transpose(-2, -1).contiguous()
         cas_score = torch.softmax(cas, dim=-1)
+        #  [N, C]
+        act_score = torch.softmax(torch.topk(cas, k=max(cas.shape[1] // self.factor, 1), dim=1)[0].mean(dim=1), dim=-1)
 
-        # [N, L, 1], segment activation sequence
-        sas = torch.norm(feat, p=2, dim=-1, keepdim=True)
-        min_norm = torch.amin(sas, dim=1, keepdim=True)
-        max_norm = torch.amax(sas, dim=1, keepdim=True)
-        sas_score = (sas - min_norm) / torch.where(torch.eq(max_norm, 0.0), torch.ones_like(max_norm), max_norm)
-
-        seg_score = (cas_score + sas_score) / 2
-
-        act_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1)[1]
-        bkg_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1, largest=False)[1]
-        # [N, C], action classification score is aggregated by cas
-        act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
-        bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
-        return act_score, bkg_score, cas_score, sas_score.squeeze(dim=-1), seg_score, act_index, graph
+        seg_score = sas * cas_score
+        return rgb_atte, flow_atte, act_score, seg_score, cas_score, sas.squeeze(dim=-1)
 
 
-def sas_label(act_index, num_seg, label):
-    masks = []
-    for i in range(act_index.shape[0]):
-        pos_index = act_index[i][:, label[i].bool()].flatten()
-        mask = torch.zeros(num_seg, device=act_index.device)
-        mask[pos_index] = 1.0
-        masks.append(mask)
-    return torch.stack(masks)
+def multiple_loss(act_score, label):
+    act_num = torch.sum(label, dim=-1, keepdim=True)
+    act_num = torch.where(torch.eq(act_num, 0.0), torch.ones_like(act_num), act_num)
+    act_label = label / act_num
+    loss = ((-act_label * torch.log(act_score)).sum(dim=-1)).mean()
+    return loss
 
 
-def divide_label(label):
-    pos_num = label.sum(dim=-1)
-    neg_num = (1.0 - label).sum(dim=-1)
-    # avoid divide by zero
-    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
-    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
-    return pos_num, neg_num
+def mutual_loss(rgb_atte, flow_atte):
+    return (F.mse_loss(rgb_atte, flow_atte.detach()) + F.mse_loss(flow_atte, rgb_atte.detach())) / 2
 
 
-def cross_entropy(act_score, bkg_score, label, eps=1e-8):
-    act_num, bkg_num = divide_label(label)
-    act_loss = (-(label * torch.log(act_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
-    bkg_loss = (-((1.0 - label) * torch.log(1.0 - bkg_score + eps)).sum(dim=-1) / bkg_num).mean(dim=0)
-    return act_loss + bkg_loss
+def norm_loss(rgb_atte, flow_atte):
+    return (rgb_atte.abs().mean() + flow_atte.abs().mean()) / 2
 
 
-# ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
-def generalized_cross_entropy(score, label, q=0.7, eps=1e-8):
-    pos_num, neg_num = divide_label(label)
-    pos_loss = ((((1.0 - (score + eps) ** q) / q) * label).sum(dim=-1) / pos_num).mean(dim=0)
-    neg_loss = ((((1.0 - (1.0 - score + eps) ** q) / q) * (1.0 - label)).sum(dim=-1) / neg_num).mean(dim=0)
-    return pos_loss + neg_loss
+def supp_loss(cas_score, sas_score, label):
+    score = cas_score * sas_score.unsqueeze(dim=-1)
+    act_score = torch.softmax(torch.topk(score, k=max(score.shape[1] // 8, 1), dim=1)[0].mean(dim=1), dim=-1)
+
+    act_num = torch.sum(label, dim=-1, keepdim=True)
+    act_num = torch.where(torch.eq(act_num, 0.0), torch.ones_like(act_num), act_num)
+    act_label = label / act_num
+
+    loss = ((-act_label * torch.log(act_score)).sum(dim=-1)).mean()
+    return loss
+
+
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1 or classname.find('Linear') != -1:
+        torch.nn.init.kaiming_uniform_(m.weight)
+        if type(m.bias) != type(None):
+            m.bias.data.fill_(0)

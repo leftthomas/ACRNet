@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, sas_label, cross_entropy, generalized_cross_entropy
+from model import Model, multiple_loss, mutual_loss, norm_loss, supp_loss
 from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred
 
 
@@ -21,7 +21,10 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, bkg_score, cas_score, sas_score, seg_score, _, graph = net(data)
+            _, _, act_score, seg_score, cas_score, sas_score = net(data)
+
+            graph = torch.ones(1, seg_score.shape[1], seg_score.shape[1], device=seg_score.device)
+
             # [C],  [T, C],  [T]
             act_score, cas_score, sas_score = act_score.squeeze(0), cas_score.squeeze(0), sas_score.squeeze(0)
             # [T, C],  [T]
@@ -112,7 +115,7 @@ if __name__ == '__main__':
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
-    model = Model(len(test_data.class_to_idx), args.hidden_dim, args.factor, args.temperature).cuda()
+    model = Model(len(test_data.class_to_idx), args.hidden_dim, args.factor).cuda()
     best_mAP, metric_info = 0, {}
     if args.model_file:
         model.load_state_dict(torch.load(args.model_file))
@@ -131,10 +134,10 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            act_scores, bkg_scores, cas_scores, sas_scores, seg_scores, act_index, graphs = model(feat)
-            cas_loss = cross_entropy(act_scores, bkg_scores, label)
-            sas_loss = generalized_cross_entropy(sas_scores, sas_label(act_index, args.num_seg, label))
-            loss = cas_loss + sas_loss
+            rgb_atte, flow_atte, act_scores, _, cas_scores, sas = model(feat)
+            loss = multiple_loss(act_scores, label) + mutual_loss(rgb_atte, flow_atte) + 0.8 * norm_loss(rgb_atte,
+                                                                                                         flow_atte) + supp_loss(
+                cas_scores, sas, label)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
