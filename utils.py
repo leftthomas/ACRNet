@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument('--iou_th', type=float, default=0.4, help='threshold for NMS IoU')
     parser.add_argument('--act_th', type=str, default='np.arange(0.0, 1.0, 0.1)', help='threshold for candidate frames')
     parser.add_argument('--factor', type=int, default=40, help='used top n/factor segments for action prediction')
+    parser.add_argument('--temperature', default=0.07, type=float, help='temperature used in softmax')
     parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
     parser.add_argument('--fps', type=int, default=25, help='fps for each video')
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
@@ -51,6 +52,7 @@ class Config(object):
         self.act_th = eval(args.act_th)
         self.map_th = args.map_th
         self.factor = args.factor
+        self.temperature = args.temperature
         self.num_seg = args.num_seg
         self.fps = args.fps
         self.rate = args.rate
