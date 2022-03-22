@@ -1,14 +1,10 @@
 import json
-from functools import partial
 
 import numpy as np
 import pandas as pd
 import torch
 from mmaction.core.evaluation import ActivityNetLocalization
 from mmaction.localization import soft_nms
-from ray import tune
-from ray.tune import CLIReporter
-from ray.tune.schedulers import ASHAScheduler
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
@@ -94,7 +90,8 @@ def test_loop(net, data_loader, num_iter):
         return test_info
 
 
-def save_loop(net, data_loader, best_mAP, metric_info, num_iter):
+def save_loop(net, data_loader, num_iter):
+    global best_mAP
     test_info = test_loop(net, data_loader, num_iter)
     for key, value in test_info.items():
         if key not in metric_info:
@@ -107,37 +104,36 @@ def save_loop(net, data_loader, best_mAP, metric_info, num_iter):
     data_frame.to_csv('{}/{}.csv'.format(args.save_path, args.data_name), index_label='Step', float_format='%.3f')
     if test_info['mAP@AVG'] > best_mAP:
         best_mAP = test_info['mAP@AVG']
-        torch.save(net.state_dict(), '{}/{}.pth'.format(args.save_path, args.data_name))
-    return best_mAP
+        torch.save(model.state_dict(), '{}/{}.pth'.format(args.save_path, args.data_name))
 
 
-def train_loop(configs, arg):
-    test_data = VideoDataset(arg.data_path, arg.data_name, 'test', arg.num_seg)
-    test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=arg.workers)
+if __name__ == '__main__':
+    args = parse_args()
+    test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
+    test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
-    model = Model(len(test_data.class_to_idx), arg.hidden_dim, configs['factor'], configs['temperature']).cuda()
+    model = Model(len(test_data.class_to_idx), args.hidden_dim, args.factor, args.temperature).cuda()
     best_mAP, metric_info = 0, {}
-    if arg.model_file:
-        model.load_state_dict(torch.load(arg.model_file))
-        best_mAP = save_loop(model, test_loader, best_mAP, metric_info, 1)
+    if args.model_file:
+        model.load_state_dict(torch.load(args.model_file))
+        save_loop(model, test_loader, 1)
 
     else:
-        train_data = VideoDataset(arg.data_path, arg.data_name, 'train', arg.num_seg,
-                                  configs['batch_size'] * arg.num_iter)
-        train_loader = iter(
-            DataLoader(train_data, batch_size=configs['batch_size'], shuffle=True, num_workers=arg.workers))
-        optimizer = Adam(model.parameters(), lr=configs['init_lr'], weight_decay=configs['weight_decay'])
-        lr_scheduler = CosineAnnealingLR(optimizer, T_max=arg.num_iter)
+        train_data = VideoDataset(args.data_path, args.data_name, 'train', args.num_seg,
+                                  args.batch_size * args.num_iter)
+        train_loader = iter(DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers))
+        optimizer = Adam(model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
+        lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter)
 
         total_loss, total_num, metric_info['Loss'] = 0.0, 0, []
-        train_bar = tqdm(range(1, arg.num_iter + 1), initial=1, dynamic_ncols=True)
+        train_bar = tqdm(range(1, args.num_iter + 1), initial=1, dynamic_ncols=True)
         for step in train_bar:
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
             act_scores, bkg_scores, cas_scores, sas_scores, seg_scores, act_index, graphs = model(feat)
             cas_loss = cross_entropy(act_scores, bkg_scores, label)
-            sas_loss = generalized_cross_entropy(sas_scores, sas_label(act_index, arg.num_seg, label))
+            sas_loss = generalized_cross_entropy(sas_scores, sas_label(act_index, args.num_seg, label))
             loss = cas_loss + sas_loss
             optimizer.zero_grad()
             loss.backward()
@@ -146,29 +142,8 @@ def train_loop(configs, arg):
             total_num += feat.size(0)
             total_loss += loss.item() * feat.size(0)
             train_bar.set_description('Train Step: [{}/{}] Loss: {:.3f}'
-                                      .format(step, arg.num_iter, total_loss / total_num))
+                                      .format(step, args.num_iter, total_loss / total_num))
             lr_scheduler.step()
-            if step % arg.eval_iter == 0:
+            if step % args.eval_iter == 0:
                 metric_info['Loss'].append('{:.3f}'.format(total_loss / total_num))
-                best_mAP = save_loop(model, test_loader, best_mAP, metric_info, step)
-                tune.report(loss=(total_loss / total_num), accuracy=best_mAP)
-
-
-if __name__ == '__main__':
-    args = parse_args()
-    config = {
-        'factor': tune.choice(np.arange(4, 80, 2).tolist()),
-        'temperature': tune.choice(np.arange(0.05, 0.2, 0.01).tolist()),
-        'init_lr': tune.loguniform(1e-5, 1e-2),
-        'weight_decay': tune.loguniform(1e-5, 1e-2),
-        'batch_size': tune.choice([8, 16, 32, 64])
-    }
-    scheduler = ASHAScheduler(metric='accuracy', mode='max', max_t=args.num_iter // args.eval_iter,
-                              grace_period=1, reduction_factor=2)
-    reporter = CLIReporter(metric_columns=['loss', 'accuracy', 'training_iteration'])
-    result = tune.run(partial(train_loop, arg=args),
-                      resources_per_trial={'cpu': 2, 'gpu': 1}, config=config, num_samples=100,
-                      scheduler=scheduler, progress_reporter=reporter)
-    best_trial = result.get_best_trial('accuracy', 'max', 'all')
-    print('Best trial config: {}'.format(best_trial.config))
-    print('Best trial accuracy: {}'.format(best_trial.best_result['accuracy']))
+                save_loop(model, test_loader, step)
