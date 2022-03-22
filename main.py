@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, sas_label, cross_entropy, generalized_cross_entropy
+from model import Model, multiple_loss, norm_loss
 from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred
 
 
@@ -21,11 +21,11 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, bkg_score, cas_score, sas_score, seg_score, _, graph = net(data)
+            act_score, _, cas_score, sas_score, seg_score, graph = net(data)
             # [C],  [T, C],  [T]
             act_score, cas_score, sas_score = act_score.squeeze(0), cas_score.squeeze(0), sas_score.squeeze(0)
             # [T, C],  [T]
-            seg_score, graph = seg_score.squeeze(0), graph.squeeze(0).cpu().numpy()
+            seg_score, graph = torch.softmax(seg_score, dim=-1).squeeze(0), graph.squeeze(0).cpu().numpy()
 
             pred = torch.ge(act_score, args.cls_th)
             num_correct += 1 if torch.equal(gt, pred.float()) else 0
@@ -131,10 +131,9 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            act_scores, bkg_scores, cas_scores, sas_scores, seg_scores, act_index, graphs = model(feat)
-            cas_loss = cross_entropy(act_scores, bkg_scores, label)
-            sas_loss = generalized_cross_entropy(sas_scores, sas_label(act_index, args.num_seg, label))
-            loss = cas_loss + sas_loss
+            act_scores, f_act_scores, cas_scores, sas_scores, seg_scores, graphs = model(feat)
+            act_loss = multiple_loss(act_scores, label) + multiple_loss(f_act_scores, label)
+            loss = act_loss + 0.8 * norm_loss(sas_scores)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
