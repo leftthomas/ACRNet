@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import torch
 from mmaction.core.evaluation import ActivityNetLocalization
-from mmaction.localization import soft_nms
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -21,16 +20,18 @@ def test_loop(net, data_loader, num_iter):
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
             _, rgb_cas, flow_cas, seg_score, ori_rgb_graph, rgb_graph, flow_graph = net(data)
-            act_score = fuse_act_score(rgb_cas, flow_cas, args.factor) + fuse_act_score(flow_cas, rgb_cas, args.factor)
-            act_score = torch.softmax(act_score / 2, dim=-1)
-            rgb_score = torch.softmax(rgb_cas, dim=-1)
-            flow_score = torch.softmax(flow_cas, dim=-1)
+            act_rgb_score, act_rgb_th = fuse_act_score(rgb_cas, flow_cas)
+            act_flow_score, act_flow_th = fuse_act_score(flow_cas, rgb_cas)
+            act_score = (act_rgb_score + act_flow_score) / 2
+            act_th = (act_rgb_th + act_flow_th) / 2
             # [C],  [T, C],  [T, C]
-            act_score, rgb_score, flow_score = act_score.squeeze(0), rgb_score.squeeze(0), flow_score.squeeze(0)
+            act_score, rgb_score, flow_score = act_score.squeeze(0), rgb_cas.squeeze(0), flow_cas.squeeze(0)
             # [T, C],  [T, T]
             seg_score, ori_rgb_graph = seg_score.squeeze(0), ori_rgb_graph.squeeze(0).cpu().numpy()
             # [T, T],  [T, T]
             rgb_graph, flow_graph = rgb_graph.squeeze(0).cpu().numpy(), flow_graph.squeeze(0).cpu().numpy()
+            # [C]
+            act_th = act_th.squeeze(0).cpu().numpy()
 
             pred = torch.ge(act_score, args.cls_th)
             num_correct += 1 if torch.equal(gt, pred.float()) else 0
@@ -48,22 +49,22 @@ def test_loop(net, data_loader, num_iter):
             proposal_dict = {}
             for i, status in enumerate(pred):
                 if status:
-                    # enrich the proposal pool by using multiple thresholds
-                    for threshold in args.act_th:
-                        proposals = grouping(np.where(frame_score[:, i] >= threshold)[0])
-                        # make sure the proposal to be regions
-                        for proposal in proposals:
-                            if len(proposal) >= 2:
-                                if i not in proposal_dict:
-                                    proposal_dict[i] = []
-                                score = oic_score(frame_score[:, i], act_score[i].cpu().numpy(), proposal)
-                                # change frame index to second
-                                start, end = (proposal[0] + 1) / args.fps, (proposal[-1] + 2) / args.fps
-                                proposal_dict[i].append([start, end, score])
-                    # temporal soft nms
-                    # ref: BSN: Boundary Sensitive Network for Temporal Action Proposal Generation (ECCV 2018)
-                    proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.75, low_threshold=args.iou_th,
-                                                high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
+                    # # enrich the proposal pool by using multiple thresholds
+                    # for threshold in args.act_th:
+                    proposals = grouping(np.where(frame_score[:, i] >= act_th[i])[0])
+                    # make sure the proposal to be regions
+                    for proposal in proposals:
+                        if len(proposal) >= 2:
+                            if i not in proposal_dict:
+                                proposal_dict[i] = []
+                            score = oic_score(frame_score[:, i], act_score[i].cpu().numpy(), proposal)
+                            # change frame index to second
+                            start, end = (proposal[0] + 1) / args.fps, (proposal[-1] + 2) / args.fps
+                            proposal_dict[i].append([start, end, score])
+                    # # temporal soft nms
+                    # # ref: BSN: Boundary Sensitive Network for Temporal Action Proposal Generation (ECCV 2018)
+                    # proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.75, low_threshold=args.iou_th,
+                    #                             high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
             if args.save_vis:
                 # draw the pred to vis
                 draw_pred(frame_score, rgb_score, flow_score, ori_rgb_graph, rgb_graph, flow_graph, args.cls_th,
@@ -138,8 +139,8 @@ if __name__ == '__main__':
             act_scores, rgb_cass, flow_cass, _, _, rgb_graphs, flow_graphs = model(feat)
             cas_loss = cross_entropy(act_scores, label)
             graph_loss = graph_consistency(rgb_graphs, flow_graphs)
-            plus_cas_loss = (mutual_entropy(rgb_cass, flow_cass, label, args.factor) +
-                             mutual_entropy(flow_cass, rgb_cass, label, args.factor)) / 2
+            plus_cas_loss = (mutual_entropy(rgb_cass, flow_cass.detach(), label) +
+                             mutual_entropy(flow_cass, rgb_cass.detach(), label)) / 2
             ori_weight = (args.num_iter - step + 1) / args.num_iter
             plus_weight = 1.0 - ori_weight
             loss = ori_weight * cas_loss + graph_loss + plus_weight * plus_cas_loss
