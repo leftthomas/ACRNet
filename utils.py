@@ -18,12 +18,10 @@ def parse_args():
     parser.add_argument('--save_path', type=str, default='result')
     parser.add_argument('--data_name', type=str, default='thumos14',
                         choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
-    parser.add_argument('--hidden_dim', type=int, default=512, help='dimension of hidden feature')
     parser.add_argument('--cls_th', type=float, default=0.25, help='threshold for action classification')
     parser.add_argument('--iou_th', type=float, default=0.4, help='threshold for NMS IoU')
     parser.add_argument('--act_th', type=str, default='np.arange(0.0, 1.0, 0.1)', help='threshold for candidate frames')
-    parser.add_argument('--factor', type=int, default=40, help='used top n/factor segments for action prediction')
-    parser.add_argument('--temperature', default=0.07, type=float, help='temperature used in softmax')
+    parser.add_argument('--factor', type=int, default=8, help='used top n/factor segments for action prediction')
     parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
     parser.add_argument('--fps', type=int, default=25, help='fps for each video')
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
@@ -46,13 +44,11 @@ class Config(object):
         self.data_path = args.data_path
         self.save_path = args.save_path
         self.data_name = args.data_name
-        self.hidden_dim = args.hidden_dim
         self.cls_th = args.cls_th
         self.iou_th = args.iou_th
         self.act_th = eval(args.act_th)
         self.map_th = args.map_th
         self.factor = args.factor
-        self.temperature = args.temperature
         self.num_seg = args.num_seg
         self.fps = args.fps
         self.rate = args.rate
@@ -124,18 +120,20 @@ def oic_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
     return score
 
 
-def draw_pred(frame_score, cas_score, sas_score, graph, score_th, gt_dicts, idx_to_class, class_to_idx, video_name,
-              fps, save_path, data_name):
+def draw_pred(frame_score, rgb_score, flow_score, ori_rgb_graph, rgb_graph, flow_graph, score_th, gt_dicts,
+              idx_to_class, class_to_idx, video_name, fps, save_path, data_name):
     frame_indexes = np.arange(0, frame_score.shape[0])
     color_palette = sns.color_palette('deep', n_colors=len(idx_to_class))
 
-    fig = plt.figure(figsize=(7, 3))
-    ax1 = plt.subplot2grid((5, 3), (0, 0), colspan=2)
-    ax2 = plt.subplot2grid((5, 3), (1, 0), colspan=2)
-    ax3 = plt.subplot2grid((5, 3), (2, 0), colspan=2)
-    ax4 = plt.subplot2grid((5, 3), (3, 0), colspan=2)
-    ax5 = plt.subplot2grid((5, 3), (4, 0), colspan=2)
-    ax6 = plt.subplot2grid((5, 3), (2, 2), rowspan=3)
+    fig = plt.figure(figsize=(9, 5))
+    ax1 = plt.subplot2grid((7, 4), (2, 0), colspan=3)
+    ax2 = plt.subplot2grid((7, 4), (3, 0), colspan=3)
+    ax3 = plt.subplot2grid((7, 4), (4, 0), colspan=3)
+    ax4 = plt.subplot2grid((7, 4), (5, 0), colspan=3)
+    ax5 = plt.subplot2grid((7, 4), (6, 0), colspan=3)
+    ax6 = plt.subplot2grid((7, 4), (1, 3), rowspan=2)
+    ax7 = plt.subplot2grid((7, 4), (3, 3), rowspan=2)
+    ax8 = plt.subplot2grid((7, 4), (5, 3), rowspan=2)
 
     gt_list = gt_dicts['d_{}'.format(video_name)]['annotations']
     true_labels = set()
@@ -152,7 +150,8 @@ def draw_pred(frame_score, cas_score, sas_score, graph, score_th, gt_dicts, idx_
 
     for class_id in true_labels:
         ax3.plot(frame_indexes, frame_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
-        ax4.plot(frame_indexes, cas_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
+        ax4.plot(frame_indexes, rgb_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
+        ax5.plot(frame_indexes, flow_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
         # only draw the proposal which score is high
         proposals = grouping(np.where(frame_score[:, class_id] >= score_th)[0])
         for proposal in proposals:
@@ -162,16 +161,20 @@ def draw_pred(frame_score, cas_score, sas_score, graph, score_th, gt_dicts, idx_
                 count[start:end] = 1
                 ax2.fill_between(frame_indexes, count, color=color_palette[class_id], label=idx_to_class[class_id])
     ax2.set_ylabel('Pred')
-    ax3.set_ylabel('FAS')
-    ax4.set_ylabel('CAS')
-    ax5.plot(frame_indexes, sas_score)
-    ax5.set_ylabel('SAS')
+    ax3.set_ylabel('CAS')
+    ax4.set_ylabel('CAS$_{rgb}$')
+    ax5.set_ylabel('CAS$_{flow}$')
 
-    im = ax6.imshow(graph, interpolation='nearest')
-    fig.colorbar(im, ax=ax6, fraction=0.045, pad=0.05)
-    ax6.set(xticks=[], yticks=[])
+    for ax, graph in zip([ax6, ax7, ax8], [ori_rgb_graph, rgb_graph, flow_graph]):
+        im = ax.imshow(graph, interpolation='nearest')
+        fig.colorbar(im, ax=ax, fraction=0.045, pad=0.05)
+    ax6.set_ylabel('Graph$_{rgb}$')
+    ax7.set_ylabel('Graph$_{rgb}^{enhanced}$')
+    ax8.set_ylabel('Graph$_{flow}$')
 
     plt.setp([ax1, ax2, ax3, ax4, ax5], xticks=[], yticks=[], xlim=(0, frame_score.shape[0]), ylim=(0, 1))
+    plt.setp([ax6, ax7, ax8], xticks=[], yticks=[])
+
     lines, labels = [], []
     for ax in [ax1, ax2, ax3, ax4, ax5]:
         ax_lines, ax_labels = ax.get_legend_handles_labels()
@@ -179,7 +182,7 @@ def draw_pred(frame_score, cas_score, sas_score, graph, score_th, gt_dicts, idx_
             if label not in labels:
                 lines.append(line)
                 labels.append(label)
-    fig.legend(lines, labels, loc=2, bbox_to_anchor=(0.67, 0.9))
+    fig.legend(lines, labels, loc=2, bbox_to_anchor=(0.73, 0.9))
 
     save_name = '{}/{}/{}.pdf'.format(save_path, data_name, video_name)
     if not os.path.exists(os.path.dirname(save_name)):
