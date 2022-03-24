@@ -70,12 +70,10 @@ def graph_consistency(rgb_graph, flow_graph):
 def count_pos(ref_cas):
     # [N, T, C]
     ref_cas = torch.softmax(ref_cas.detach(), dim=-1)
+    pos_value = torch.amax(ref_cas, dim=-1, keepdim=True)
+    ref_cas = torch.where(torch.eq(ref_cas, pos_value), torch.ones_like(ref_cas), torch.zeros_like(ref_cas))
     # [N, C]
     k = ref_cas.sum(dim=1)
-    k_max = ref_cas.amax(dim=1)
-    # avoid divided by zero
-    k_max = torch.where(torch.eq(k_max, 0.0), torch.ones_like(k_max), k_max)
-    k = k / k_max
     return k
 
 
@@ -93,15 +91,16 @@ def mutual_entropy(base_cas, ref_cas, label, factor):
             pos_value = pos_value[-pos_num::].mean()
             pos_list.append(pos_value)
 
-            neg_value = base_cas[i, :, j].topk(k=base_cas.shape[1] - pos_k, largest=False)[0]
-            neg_num = min(base_cas.shape[1] // factor, base_cas.shape[1] - pos_k)
+            neg_k = max(base_cas.shape[1] - pos_k, 1)
+            neg_value = base_cas[i, :, j].topk(k=neg_k, largest=False)[0]
+            neg_num = min(base_cas.shape[1] // factor, neg_k)
             # hard negative
             neg_value = neg_value[-neg_num::].mean()
             neg_list.append(neg_value)
         pos, neg = torch.softmax(torch.stack(pos_list), dim=-1), torch.softmax(torch.stack(neg_list), dim=-1)
         pos_loss = pos_loss + cross_entropy(pos, label[i, :], reduce=False)
         neg_loss = neg_loss + cross_entropy(1.0 - neg, label[i, :], reduce=False)
-    loss = (pos_loss + neg_loss) / base_cas.shape[0]
+    loss = ((pos_loss + neg_loss) / 2) / base_cas.shape[0]
     return loss
 
 
