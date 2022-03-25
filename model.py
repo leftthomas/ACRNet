@@ -65,43 +65,46 @@ def graph_consistency(rgb_graph, flow_graph):
 
 
 def split_pos_neg(ref_cas):
-    sort_value, sort_index = torch.sort(ref_cas, descending=True)
-    pos_list, neg_list = [], []
-    if len(ref_cas) == 1:
-        return sort_index, sort_index
-    if len(ref_cas) == 2:
-        return sort_index[[0]], sort_index[[-1]]
-    # else
-    pos_list.append(sort_index[0])
-    neg_list.append(sort_index[-1])
-    for i, value in zip(sort_index[1:-1], sort_value[1:-1]):
-        pos_center = torch.mean(ref_cas[torch.stack(pos_list)])
-        neg_center = torch.mean(ref_cas[torch.stack(neg_list)])
+    n, t, c = ref_cas.shape
+    # [N*C, T]
+    ref_cas = ref_cas.transpose(-1, -2).contiguous().view(-1, t)
+    sort_value, sort_index = torch.sort(ref_cas, dim=-1, descending=True)
+    mask = torch.zeros_like(ref_cas)
+    # the index of the largest value is inited as positive
+    mask[torch.arange(mask.shape[0], device=mask.device), sort_index[:, 0]] = 1
+    pos_sum, neg_sum = sort_value[:, 0], sort_value[:, -1]
+    pos_num, neg_num = torch.ones_like(pos_sum), torch.ones_like(neg_sum)
+    for i in range(1, t - 1):
+        index, value = sort_index[:, i], sort_value[:, i]
+        pos_center = pos_sum / pos_num
+        neg_center = neg_sum / neg_num
         pos_distance = torch.abs(value - pos_center)
         neg_distance = torch.abs(value - neg_center)
-        if pos_distance <= neg_distance:
-            pos_list.append(i)
-        else:
-            neg_list.append(i)
-    return torch.stack(pos_list), torch.stack(neg_list)
+        condition = torch.le(pos_distance, neg_distance)
+        pos_list = torch.where(condition, value, torch.zeros_like(value))
+        neg_list = torch.where(~condition, value, torch.zeros_like(value))
+        # update centers
+        pos_num = pos_num + condition.float()
+        neg_num = neg_num + (~condition).float()
+        pos_sum = pos_sum + pos_list
+        neg_sum = neg_sum + neg_list
+        # update mask
+        mask[torch.arange(mask.shape[0], device=mask.device), index] = condition.float()
+    # [N, T, C]
+    mask = mask.view(n, c, t).transpose(-1, -2).contiguous()
+    return mask
 
 
 def mutual_entropy(base_cas, ref_cas, label):
-    poss, negs = [], []
-    for i in range(base_cas.shape[0]):
-        pos_list, neg_list = [], []
-        for j in range(base_cas.shape[-1]):
-            pos_index, neg_index = split_pos_neg(ref_cas[i, :, j])
-            pos_value = base_cas[i, pos_index, j].mean()
-            pos_list.append(pos_value)
-            neg_value = base_cas[i, neg_index, j].mean()
-            neg_list.append(neg_value)
-        pos, neg = torch.stack(pos_list), torch.stack(neg_list)
-        poss.append(pos)
-        negs.append(neg)
-    poss, negs = torch.stack(poss), torch.stack(negs)
-    pos_loss = cross_entropy(poss, label)
-    neg_loss = cross_entropy(1.0 - negs, label)
+    mask = split_pos_neg(ref_cas)
+    pos_num = mask.sum(dim=1)
+    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
+    neg_num = (1.0 - mask).sum(dim=1)
+    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
+    pos = (base_cas * mask).sum(dim=1) / pos_num
+    neg = (base_cas * (1.0 - mask)).sum(dim=1) / neg_num
+    pos_loss = cross_entropy(pos, label)
+    neg_loss = cross_entropy(1.0 - neg, label)
     loss = pos_loss + neg_loss
     return loss
 

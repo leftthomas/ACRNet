@@ -49,8 +49,6 @@ def test_loop(net, data_loader, num_iter):
             proposal_dict = {}
             for i, status in enumerate(pred):
                 if status:
-                    # # enrich the proposal pool by using multiple thresholds
-                    # for threshold in args.act_th:
                     proposals = grouping(np.where(frame_score[:, i] >= act_th[i])[0])
                     # make sure the proposal to be regions
                     for proposal in proposals:
@@ -61,10 +59,6 @@ def test_loop(net, data_loader, num_iter):
                             # change frame index to second
                             start, end = (proposal[0] + 1) / args.fps, (proposal[-1] + 2) / args.fps
                             proposal_dict[i].append([start, end, score])
-                    # # temporal soft nms
-                    # # ref: BSN: Boundary Sensitive Network for Temporal Action Proposal Generation (ECCV 2018)
-                    # proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.75, low_threshold=args.iou_th,
-                    #                             high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
             if args.save_vis:
                 # draw the pred to vis
                 draw_pred(frame_score, rgb_score, flow_score, ori_rgb_graph, rgb_graph, flow_graph, args.cls_th,
