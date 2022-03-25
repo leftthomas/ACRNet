@@ -149,7 +149,7 @@ def draw_pred(frame_score, rgb_score, flow_score, ori_rgb_graph, rgb_graph, flow
         ax4.plot(frame_indexes, rgb_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
         ax5.plot(frame_indexes, flow_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
         # only draw the proposal which score is high
-        proposals = grouping(np.where(frame_score[:, class_id] >= score_th)[0])
+        proposals = grouping(np.where(frame_score[:, class_id] >= score_th[class_id])[0])
         for proposal in proposals:
             if len(proposal) >= 2:
                 start, end = proposal[0], proposal[-1]

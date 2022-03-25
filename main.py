@@ -61,7 +61,7 @@ def test_loop(net, data_loader, num_iter):
                             proposal_dict[i].append([start, end, score])
             if args.save_vis:
                 # draw the pred to vis
-                draw_pred(frame_score, rgb_score, flow_score, ori_rgb_graph, rgb_graph, flow_graph, args.cls_th,
+                draw_pred(frame_score, rgb_score, flow_score, ori_rgb_graph, rgb_graph, flow_graph, act_th,
                           data_loader.dataset.annotations, data_loader.dataset.idx_to_class,
                           data_loader.dataset.class_to_idx, video_name, args.fps, args.save_path, args.data_name)
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)
