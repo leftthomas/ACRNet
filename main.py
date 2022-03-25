@@ -20,8 +20,8 @@ def test_loop(net, data_loader, num_iter):
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
             _, rgb_cas, flow_cas, seg_score, ori_rgb_graph, rgb_graph, flow_graph = net(data)
-            act_rgb_score, act_rgb_th = fuse_act_score(rgb_cas, flow_cas)
-            act_flow_score, act_flow_th = fuse_act_score(flow_cas, rgb_cas)
+            act_rgb_score, act_rgb_th = fuse_act_score(rgb_cas, flow_cas.detach())
+            act_flow_score, act_flow_th = fuse_act_score(flow_cas, rgb_cas.detach())
             act_score = (act_rgb_score + act_flow_score) / 2
             act_th = (act_rgb_th + act_flow_th) / 2
             # [C],  [T, C],  [T, C]

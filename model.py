@@ -110,16 +110,11 @@ def mutual_entropy(base_cas, ref_cas, label):
 
 
 def fuse_act_score(base_cas, ref_cas):
-    poss, ths = [], []
-    for i in range(base_cas.shape[0]):
-        pos_list, pos_th = [], []
-        for j in range(base_cas.shape[-1]):
-            pos_index, neg_index = split_pos_neg(ref_cas[i, :, j])
-            pos_value = base_cas[i, pos_index, j].mean()
-            min_value = torch.amin(base_cas[i, pos_index, j])
-            pos_list.append(pos_value)
-            pos_th.append(min_value)
-        poss.append(torch.stack(pos_list))
-        ths.append(torch.stack(pos_th))
-    poss, ths = torch.stack(poss), torch.stack(ths)
-    return poss, ths
+    mask = split_pos_neg(ref_cas)
+    pos_num = mask.sum(dim=1)
+    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
+    pos = (base_cas * mask).sum(dim=1) / pos_num
+    # obtain the threshold
+    ths = torch.where(mask.bool(), base_cas, torch.ones_like(base_cas))
+    ths = torch.amin(ths, dim=1)
+    return pos, ths
