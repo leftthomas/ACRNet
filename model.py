@@ -19,13 +19,13 @@ class CCM(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, factor):
+    def __init__(self, num_classes):
         super(Model, self).__init__()
 
-        self.factor = factor
         self.rgb_encoder = CCM(1024)
         self.flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.ReLU())
-        self.cas = nn.Conv1d(1024, num_classes, kernel_size=1)
+        self.rgb_cas = nn.Conv1d(1024, num_classes, kernel_size=1)
+        self.flow_cas = nn.Conv1d(1024, num_classes, kernel_size=1)
 
     def forward(self, x):
         # [N, D, T]
@@ -34,12 +34,9 @@ class Model(nn.Module):
         rgb_feat = self.rgb_encoder(rgb, flow)
         flow_feat = self.flow_encoder(flow)
         # [N, T, C], class activation sequence
-        rgb_cas = torch.softmax(self.cas(rgb_feat).transpose(-1, -2).contiguous(), dim=-1)
-        flow_cas = torch.softmax(self.cas(flow_feat).transpose(-1, -2).contiguous(), dim=-1)
+        rgb_cas = torch.softmax(self.rgb_cas(rgb_feat).transpose(-1, -2).contiguous(), dim=-1)
+        flow_cas = torch.softmax(self.flow_cas(flow_feat).transpose(-1, -2).contiguous(), dim=-1)
         seg_score = (rgb_cas + flow_cas) / 2
-
-        k = max(seg_score.shape[1] // self.factor, 1)
-        act_score = seg_score.topk(k, dim=1)[0].mean(dim=1)
 
         ori_rgb = F.normalize(rgb, p=2, dim=1)
         normed_rgb = F.normalize(rgb_feat, p=2, dim=1)
@@ -49,7 +46,7 @@ class Model(nn.Module):
         rgb_graph = torch.matmul(normed_rgb.transpose(-1, -2).contiguous(), normed_rgb)
         flow_graph = torch.matmul(normed_flow.transpose(-1, -2).contiguous(), normed_flow)
 
-        return act_score, rgb_cas, flow_cas, seg_score, ori_rgb_graph, rgb_graph, flow_graph
+        return rgb_cas, flow_cas, seg_score, ori_rgb_graph, rgb_graph, flow_graph
 
 
 def cross_entropy(score, label, eps=1e-8):
@@ -64,12 +61,12 @@ def graph_consistency(rgb_graph, flow_graph):
     return F.mse_loss(rgb_graph, flow_graph)
 
 
-def split_pos_neg(ref_cas):
-    n, t, c = ref_cas.shape
+def split_pos_neg(cas_score):
+    n, t, c = cas_score.shape
     # [N*C, T]
-    ref_cas = ref_cas.transpose(-1, -2).contiguous().view(-1, t)
-    sort_value, sort_index = torch.sort(ref_cas, dim=-1, descending=True)
-    mask = torch.zeros_like(ref_cas)
+    cas_score = cas_score.transpose(-1, -2).contiguous().view(-1, t)
+    sort_value, sort_index = torch.sort(cas_score, dim=-1, descending=True)
+    mask = torch.zeros_like(cas_score)
     # the index of the largest value is inited as positive
     mask[torch.arange(mask.shape[0], device=mask.device), sort_index[:, 0]] = 1
     pos_sum, neg_sum = sort_value[:, 0], sort_value[:, -1]
@@ -95,26 +92,30 @@ def split_pos_neg(ref_cas):
     return mask
 
 
-def mutual_entropy(base_cas, ref_cas, label):
-    mask = split_pos_neg(ref_cas)
-    pos_num = mask.sum(dim=1)
+def mutual_entropy(cas_score, label):
+    pos_mask = split_pos_neg(cas_score)
+    neg_mask = 1.0 - pos_mask
+    pos_mask = F.dropout(pos_mask, p=0.5, training=True)
+    neg_mask = F.dropout(neg_mask, p=0.5, training=True)
+
+    pos_num = pos_mask.sum(dim=1)
     pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
-    neg_num = (1.0 - mask).sum(dim=1)
+    neg_num = neg_mask.sum(dim=1)
     neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
-    pos = (base_cas * mask).sum(dim=1) / pos_num
-    neg = (base_cas * (1.0 - mask)).sum(dim=1) / neg_num
+    pos = (cas_score * pos_mask).sum(dim=1) / pos_num
+    neg = (cas_score * neg_mask).sum(dim=1) / neg_num
     pos_loss = cross_entropy(pos, label)
     neg_loss = cross_entropy(1.0 - neg, label)
     loss = pos_loss + neg_loss
     return loss
 
 
-def fuse_act_score(base_cas, ref_cas):
-    mask = split_pos_neg(ref_cas)
+def fuse_act_score(cas_score):
+    mask = split_pos_neg(cas_score)
     pos_num = mask.sum(dim=1)
     pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
-    pos = (base_cas * mask).sum(dim=1) / pos_num
+    pos = (cas_score * mask).sum(dim=1) / pos_num
     # obtain the threshold
-    ths = torch.where(mask.bool(), base_cas, torch.ones_like(base_cas))
+    ths = torch.where(mask.bool(), cas_score, torch.ones_like(cas_score))
     ths = torch.amin(ths, dim=1)
     return pos, ths

@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, cross_entropy, graph_consistency, mutual_entropy, fuse_act_score
+from model import Model, graph_consistency, mutual_entropy, fuse_act_score
 from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred
 
 
@@ -19,10 +19,11 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            _, rgb_cas, flow_cas, seg_score, ori_rgb_graph, rgb_graph, flow_graph = net(data)
-            act_rgb_score, act_rgb_th = fuse_act_score(rgb_cas, flow_cas.detach())
-            act_flow_score, act_flow_th = fuse_act_score(flow_cas, rgb_cas.detach())
+            rgb_cas, flow_cas, seg_score, ori_rgb_graph, rgb_graph, flow_graph = net(data)
+            act_rgb_score, act_rgb_th = fuse_act_score(rgb_cas)
+            act_flow_score, act_flow_th = fuse_act_score(flow_cas)
             act_score = (act_rgb_score + act_flow_score) / 2
+
             act_th = (act_rgb_th + act_flow_th) / 2
             # [C],  [T, C],  [T, C]
             act_score, rgb_score, flow_score = act_score.squeeze(0), rgb_cas.squeeze(0), flow_cas.squeeze(0)
@@ -112,7 +113,7 @@ if __name__ == '__main__':
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
-    model = Model(len(test_data.class_to_idx), args.factor).cuda()
+    model = Model(len(test_data.class_to_idx)).cuda()
     best_mAP, metric_info = 0, {}
     if args.model_file:
         model.load_state_dict(torch.load(args.model_file))
@@ -130,14 +131,10 @@ if __name__ == '__main__':
             model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            act_scores, rgb_cass, flow_cass, _, _, rgb_graphs, flow_graphs = model(feat)
-            cas_loss = cross_entropy(act_scores, label)
+            rgb_cass, flow_cass, _, _, rgb_graphs, flow_graphs = model(feat)
             graph_loss = graph_consistency(rgb_graphs, flow_graphs)
-            plus_cas_loss = (mutual_entropy(rgb_cass, flow_cass.detach(), label) +
-                             mutual_entropy(flow_cass, rgb_cass.detach(), label)) / 2
-            ori_weight = (args.num_iter - step + 1) / args.num_iter
-            plus_weight = 1.0 - ori_weight
-            loss = ori_weight * cas_loss + graph_loss + plus_weight * plus_cas_loss
+            cas_loss = (mutual_entropy(rgb_cass, label) + mutual_entropy(flow_cass, label)) / 2
+            loss = graph_loss + cas_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
