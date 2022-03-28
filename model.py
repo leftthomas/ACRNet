@@ -19,103 +19,89 @@ class CCM(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, hidden_dim, factor):
         super(Model, self).__init__()
 
-        self.rgb_encoder = CCM(1024)
-        self.flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.ReLU())
-        self.rgb_cas = nn.Conv1d(1024, num_classes, kernel_size=1)
-        self.flow_cas = nn.Conv1d(1024, num_classes, kernel_size=1)
+        self.factor = factor
+        self.cas_rgb_encoder = CCM(1024)
+        self.cas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.ReLU())
+        self.cas_rgb = nn.Conv1d(1024, num_classes, kernel_size=1)
+        self.cas_flow = nn.Conv1d(1024, num_classes, kernel_size=1)
+
+        self.sas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1, bias=False), nn.ReLU())
+        self.sas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1, bias=False), nn.ReLU())
+        self.sas_rgb = nn.Conv1d(1024, 1, kernel_size=1)
+        self.sas_flow = nn.Conv1d(1024, 1, kernel_size=1)
 
     def forward(self, x):
         # [N, D, T]
-        rgb = x[:, :, :1024].transpose(-1, -2).contiguous()
-        flow = x[:, :, 1024:].transpose(-1, -2).contiguous()
-        rgb_feat = self.rgb_encoder(rgb, flow)
-        flow_feat = self.flow_encoder(flow)
-        # [N, T, C], class activation sequence
-        rgb_cas = torch.softmax(self.rgb_cas(rgb_feat).transpose(-1, -2).contiguous(), dim=-1)
-        flow_cas = torch.softmax(self.flow_cas(flow_feat).transpose(-1, -2).contiguous(), dim=-1)
-        seg_score = (rgb_cas + flow_cas) / 2
+        rgb, flow = x[:, :, :1024].transpose(-1, -2).contiguous(), x[:, :, 1024:].transpose(-1, -2).contiguous()
 
-        ori_rgb = F.normalize(rgb, p=2, dim=1)
-        normed_rgb = F.normalize(rgb_feat, p=2, dim=1)
+        cas_rgb_feat, cas_flow_feat = self.cas_rgb_encoder(rgb, flow), self.cas_flow_encoder(flow)
+        # [N, T, C], class activation sequence
+        cas_rgb = self.cas_rgb(cas_rgb_feat).transpose(-1, -2).contiguous()
+        cas_flow = self.cas_flow(cas_flow_feat).transpose(-1, -2).contiguous()
+        cas = (cas_rgb + cas_flow) / 2
+        cas_score = torch.softmax(cas, dim=-1)
+
+        sas_rgb_feat, sas_flow_feat = self.sas_rgb_encoder(rgb), self.sas_flow_encoder(flow)
+        # [N, T, 1], segment activation sequence
+        sas_rgb = self.sas_rgb(sas_rgb_feat).transpose(-1, -2).contiguous()
+        sas_rgb_score = torch.sigmoid(sas_rgb)
+        sas_flow = self.sas_flow(sas_flow_feat).transpose(-1, -2).contiguous()
+        sas_flow_score = torch.sigmoid(sas_flow)
+
+        seg_score = (cas_score + sas_rgb_score + sas_flow_score) / 3
+
+        act_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1)[1]
+        bkg_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1, largest=False)[1]
+        # [N, C], action classification score is aggregated by cas
+        act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
+        bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
+
+        normed_rgb = F.normalize(cas_rgb_feat, p=2, dim=1)
         normed_flow = F.normalize(flow, p=2, dim=1)
         # [N, T, T]
-        ori_rgb_graph = torch.matmul(ori_rgb.transpose(-1, -2).contiguous(), ori_rgb)
         rgb_graph = torch.matmul(normed_rgb.transpose(-1, -2).contiguous(), normed_rgb)
         flow_graph = torch.matmul(normed_flow.transpose(-1, -2).contiguous(), normed_flow)
 
-        return rgb_cas, flow_cas, seg_score, ori_rgb_graph, rgb_graph, flow_graph
+        return act_score, bkg_score, sas_rgb_score.squeeze(dim=-1), sas_flow_score.squeeze(
+            dim=-1), act_index, seg_score, rgb_graph, flow_graph
 
 
-def cross_entropy(score, label, eps=1e-8):
-    num = label.sum(dim=-1)
+def sas_label(act_index, num_seg, label):
+    masks = []
+    for i in range(act_index.shape[0]):
+        pos_index = act_index[i][:, label[i].bool()].flatten()
+        mask = torch.zeros(num_seg, device=act_index.device)
+        mask[pos_index] = 1.0
+        masks.append(mask)
+    return torch.stack(masks)
+
+
+def divide_label(label):
+    pos_num = label.sum(dim=-1)
+    neg_num = (1.0 - label).sum(dim=-1)
     # avoid divide by zero
-    num = torch.where(torch.eq(num, 0.0), torch.ones_like(num), num)
-    act_loss = (-(label * torch.log(score + eps)).sum(dim=-1) / num).mean(dim=0)
-    return act_loss
+    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
+    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
+    return pos_num, neg_num
 
 
 def graph_consistency(rgb_graph, flow_graph):
     return F.mse_loss(rgb_graph, flow_graph)
 
 
-def split_pos_neg(cas_score):
-    n, t, c = cas_score.shape
-    # [N*C, T]
-    cas_score = cas_score.transpose(-1, -2).contiguous().view(-1, t)
-    sort_value, sort_index = torch.sort(cas_score, dim=-1, descending=True)
-    mask = torch.zeros_like(cas_score)
-    # the index of the largest value is inited as positive
-    mask[torch.arange(mask.shape[0], device=mask.device), sort_index[:, 0]] = 1
-    pos_sum, neg_sum = sort_value[:, 0], sort_value[:, -1]
-    pos_num, neg_num = torch.ones_like(pos_sum), torch.ones_like(neg_sum)
-    for i in range(1, t - 1):
-        index, value = sort_index[:, i], sort_value[:, i]
-        pos_center = pos_sum / pos_num
-        neg_center = neg_sum / neg_num
-        pos_distance = torch.abs(value - pos_center)
-        neg_distance = torch.abs(value - neg_center)
-        condition = torch.le(pos_distance, neg_distance)
-        pos_list = torch.where(condition, value, torch.zeros_like(value))
-        neg_list = torch.where(~condition, value, torch.zeros_like(value))
-        # update centers
-        pos_num = pos_num + condition.float()
-        neg_num = neg_num + (~condition).float()
-        pos_sum = pos_sum + pos_list
-        neg_sum = neg_sum + neg_list
-        # update mask
-        mask[torch.arange(mask.shape[0], device=mask.device), index] = condition.float()
-    # [N, T, C]
-    mask = mask.view(n, c, t).transpose(-1, -2).contiguous()
-    return mask
+def cross_entropy(act_score, bkg_score, label, eps=1e-8):
+    act_num, bkg_num = divide_label(label)
+    act_loss = (-(label * torch.log(act_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
+    bkg_loss = (-torch.log(1.0 - bkg_score + eps)).mean()
+    return act_loss + bkg_loss
 
 
-def mutual_entropy(cas_score, label):
-    pos_mask = split_pos_neg(cas_score)
-    neg_mask = 1.0 - pos_mask
-    pos_mask = F.dropout(pos_mask, p=0.5, training=True)
-    neg_mask = F.dropout(neg_mask, p=0.5, training=True)
-
-    pos_num = pos_mask.sum(dim=1)
-    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
-    neg_num = neg_mask.sum(dim=1)
-    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
-    pos = (cas_score * pos_mask).sum(dim=1) / pos_num
-    neg = (cas_score * neg_mask).sum(dim=1) / neg_num
-    pos_loss = cross_entropy(pos, label)
-    neg_loss = cross_entropy(1.0 - neg, label)
-    loss = pos_loss + neg_loss
-    return loss
-
-
-def fuse_act_score(cas_score):
-    mask = split_pos_neg(cas_score)
-    pos_num = mask.sum(dim=1)
-    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
-    pos = (cas_score * mask).sum(dim=1) / pos_num
-    # obtain the threshold
-    ths = torch.where(mask.bool(), cas_score, torch.ones_like(cas_score))
-    ths = torch.amin(ths, dim=1)
-    return pos, ths
+# ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
+def generalized_cross_entropy(score, label, q=0.7, eps=1e-8):
+    pos_num, neg_num = divide_label(label)
+    pos_loss = ((((1.0 - (score + eps) ** q) / q) * label).sum(dim=-1) / pos_num).mean(dim=0)
+    neg_loss = ((((1.0 - (1.0 - score + eps) ** q) / q) * (1.0 - label)).sum(dim=-1) / neg_num).mean(dim=0)
+    return pos_loss + neg_loss

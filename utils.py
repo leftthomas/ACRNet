@@ -18,7 +18,10 @@ def parse_args():
     parser.add_argument('--save_path', type=str, default='result')
     parser.add_argument('--data_name', type=str, default='thumos14',
                         choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
-    parser.add_argument('--cls_th', type=float, default=0.25, help='threshold for action classification')
+    parser.add_argument('--hidden_dim', type=int, default=512, help='dimension of hidden feature')
+    parser.add_argument('--cls_th', type=float, default=0.2, help='threshold for action classification')
+    parser.add_argument('--iou_th', type=float, default=0.4, help='threshold for NMS IoU')
+    parser.add_argument('--act_th', type=str, default='np.arange(0.0, 1.0, 0.1)', help='threshold for candidate frames')
     parser.add_argument('--factor', type=int, default=8, help='used top n/factor segments for action prediction')
     parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
     parser.add_argument('--fps', type=int, default=25, help='fps for each video')
@@ -42,7 +45,10 @@ class Config(object):
         self.data_path = args.data_path
         self.save_path = args.save_path
         self.data_name = args.data_name
+        self.hidden_dim = args.hidden_dim
         self.cls_th = args.cls_th
+        self.iou_th = args.iou_th
+        self.act_th = eval(args.act_th)
         self.map_th = args.map_th
         self.factor = args.factor
         self.num_seg = args.num_seg
@@ -116,69 +122,44 @@ def oic_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
     return score
 
 
-def draw_pred(frame_score, rgb_score, flow_score, ori_rgb_graph, rgb_graph, flow_graph, score_th, gt_dicts,
-              idx_to_class, class_to_idx, video_name, fps, save_path, data_name):
-    frame_indexes = np.arange(0, frame_score.shape[0])
+def draw_pred(frame_scores, proposal_dict, gt_dicts, idx_to_class, class_to_idx, video_name, fps, save_path, data_name):
+    frame_indexes = np.arange(0, frame_scores.shape[0])
     color_palette = sns.color_palette('deep', n_colors=len(idx_to_class))
 
-    fig = plt.figure(figsize=(9, 5))
-    ax1 = plt.subplot2grid((7, 4), (2, 0), colspan=3)
-    ax2 = plt.subplot2grid((7, 4), (3, 0), colspan=3)
-    ax3 = plt.subplot2grid((7, 4), (4, 0), colspan=3)
-    ax4 = plt.subplot2grid((7, 4), (5, 0), colspan=3)
-    ax5 = plt.subplot2grid((7, 4), (6, 0), colspan=3)
-    ax6 = plt.subplot2grid((7, 4), (1, 3), rowspan=2)
-    ax7 = plt.subplot2grid((7, 4), (3, 3), rowspan=2)
-    ax8 = plt.subplot2grid((7, 4), (5, 3), rowspan=2)
+    fig, axs = plt.subplots(3, 1, figsize=(7, 3))
 
     gt_list = gt_dicts['d_{}'.format(video_name)]['annotations']
-    true_labels = set()
     for gt in gt_list:
         start, end = gt['segment']
         label = gt['label']
-        true_labels.add(class_to_idx[label])
         # change second to frame index
         start, end = int(start * fps - 1), int(end * fps - 2)
-        count = np.zeros(frame_score.shape[0])
+        count = np.zeros(frame_scores.shape[0])
         count[start:end] = 1
-        ax1.fill_between(frame_indexes, count, color=color_palette[class_to_idx[label]], label=label)
-    ax1.set_ylabel('GT')
+        axs[0].fill_between(frame_indexes, count, color=color_palette[class_to_idx[label]], label=label)
+    axs[0].set_ylabel('GT')
 
-    for class_id in true_labels:
-        ax3.plot(frame_indexes, frame_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
-        ax4.plot(frame_indexes, rgb_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
-        ax5.plot(frame_indexes, flow_score[:, class_id], color=color_palette[class_id], label=idx_to_class[class_id])
-        # only draw the proposal which score is high
-        proposals = grouping(np.where(frame_score[:, class_id] >= score_th[class_id])[0])
-        for proposal in proposals:
-            if len(proposal) >= 2:
-                start, end = proposal[0], proposal[-1]
-                count = np.zeros(frame_score.shape[0])
-                count[start:end] = 1
-                ax2.fill_between(frame_indexes, count, color=color_palette[class_id], label=idx_to_class[class_id])
-    ax2.set_ylabel('Pred')
-    ax3.set_ylabel('CAS')
-    ax4.set_ylabel('CAS$_{rgb}$')
-    ax5.set_ylabel('CAS$_{flow}$')
+    for class_id, proposal_list in proposal_dict.items():
+        axs[2].plot(frame_indexes, frame_scores[:, class_id], color=color_palette[class_id],
+                    label=idx_to_class[class_id])
+        for proposal in proposal_list:
+            # change second to frame index
+            start, end = int(proposal[0] * fps - 1), int(proposal[1] * fps - 2)
+            count = np.zeros(frame_scores.shape[0])
+            count[start:end] = 1
+            axs[1].fill_between(frame_indexes, count, color=color_palette[class_id], label=idx_to_class[class_id])
+    axs[1].set_ylabel('Pred')
+    axs[2].set_ylabel('CAS')
 
-    for ax, graph in zip([ax6, ax7, ax8], [ori_rgb_graph, rgb_graph, flow_graph]):
-        im = ax.imshow(graph, interpolation='nearest')
-        fig.colorbar(im, ax=ax, fraction=0.045, pad=0.05)
-    ax6.set_ylabel('Graph$_{rgb}$')
-    ax7.set_ylabel('Graph$_{rgb}^{enhanced}$')
-    ax8.set_ylabel('Graph$_{flow}$')
-
-    plt.setp([ax1, ax2, ax3, ax4, ax5], xticks=[], yticks=[], xlim=(0, frame_score.shape[0]), ylim=(0, 1))
-    plt.setp([ax6, ax7, ax8], xticks=[], yticks=[])
-
+    plt.setp(axs, xticks=[], yticks=[], xlim=(0, frame_scores.shape[0]), ylim=(0, 1))
     lines, labels = [], []
-    for ax in [ax1, ax2, ax3, ax4, ax5]:
+    for ax in axs:
         ax_lines, ax_labels = ax.get_legend_handles_labels()
         for line, label in zip(ax_lines, ax_labels):
             if label not in labels:
                 lines.append(line)
                 labels.append(label)
-    fig.legend(lines, labels, loc=2, bbox_to_anchor=(0.73, 0.9))
+    fig.legend(lines, labels, loc=2, bbox_to_anchor=(0.91, 0.9))
 
     save_name = '{}/{}/{}.pdf'.format(save_path, data_name, video_name)
     if not os.path.exists(os.path.dirname(save_name)):
