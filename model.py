@@ -19,7 +19,7 @@ class CCM(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_classes, hidden_dim, factor):
+    def __init__(self, num_classes, factor):
         super(Model, self).__init__()
 
         self.factor = factor
@@ -55,18 +55,11 @@ class Model(nn.Module):
 
         act_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1)[1]
         bkg_index = seg_score.topk(k=max(seg_score.shape[1] // self.factor, 1), dim=1, largest=False)[1]
-        # [N, C], action classification score is aggregated by cas
+        # [N, C], action score is aggregated by cas
         act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
         bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
 
-        normed_rgb = F.normalize(cas_rgb_feat, p=2, dim=1)
-        normed_flow = F.normalize(flow, p=2, dim=1)
-        # [N, T, T]
-        rgb_graph = torch.matmul(normed_rgb.transpose(-1, -2).contiguous(), normed_rgb)
-        flow_graph = torch.matmul(normed_flow.transpose(-1, -2).contiguous(), normed_flow)
-
-        return act_score, bkg_score, sas_rgb_score.squeeze(dim=-1), sas_flow_score.squeeze(
-            dim=-1), act_index, seg_score, rgb_graph, flow_graph
+        return act_score, bkg_score, sas_rgb_score.squeeze(dim=-1), sas_flow_score.squeeze(dim=-1), act_index, seg_score
 
 
 def sas_label(act_index, num_seg, label):
