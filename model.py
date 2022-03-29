@@ -1,6 +1,13 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1 or classname.find('Linear') != -1:
+        torch.nn.init.kaiming_uniform_(m.weight)
+        if type(m.bias) != type(None):
+            m.bias.data.fill_(0)
 
 
 # ref: Cross-modal Consensus Network for Weakly Supervised Temporal Action Localization (ACM MM 2021)
@@ -28,10 +35,12 @@ class Model(nn.Module):
         self.cas_rgb = nn.Conv1d(1024, num_classes, kernel_size=1)
         self.cas_flow = nn.Conv1d(1024, num_classes, kernel_size=1)
 
-        self.sas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1, bias=False), nn.ReLU())
-        self.sas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1, bias=False), nn.ReLU())
+        self.sas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.ReLU())
+        self.sas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.ReLU())
         self.sas_rgb = nn.Conv1d(1024, 1, kernel_size=1)
         self.sas_flow = nn.Conv1d(1024, 1, kernel_size=1)
+
+        self.apply(weights_init)
 
     def forward(self, x):
         # [N, D, T]
@@ -79,10 +88,6 @@ def divide_label(label):
     pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
     neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
     return pos_num, neg_num
-
-
-def graph_consistency(rgb_graph, flow_graph):
-    return F.mse_loss(rgb_graph, flow_graph)
 
 
 def cross_entropy(act_score, bkg_score, label, eps=1e-8):
