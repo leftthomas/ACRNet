@@ -15,8 +15,8 @@ class CCM(nn.Module):
     def __init__(self, feat_dim):
         super(CCM, self).__init__()
         self.global_context = nn.Sequential(nn.AdaptiveAvgPool1d(1), nn.Conv1d(feat_dim, feat_dim, 3, padding=1),
-                                            nn.ReLU())
-        self.local_context = nn.Sequential(nn.Conv1d(feat_dim, feat_dim, 3, padding=1), nn.ReLU())
+                                            nn.Dropout(p=0.5), nn.ReLU())
+        self.local_context = nn.Sequential(nn.Conv1d(feat_dim, feat_dim, 3, padding=1), nn.Dropout(p=0.5), nn.ReLU())
 
     def forward(self, global_feat, local_feat):
         global_context = self.global_context(global_feat)
@@ -31,12 +31,15 @@ class Model(nn.Module):
 
         self.factor = factor
         self.cas_rgb_encoder = CCM(1024)
-        self.cas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.ReLU())
+        self.cas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
+                                              nn.ReLU())
         self.cas_rgb = nn.Conv1d(1024, num_classes, kernel_size=1)
         self.cas_flow = nn.Conv1d(1024, num_classes, kernel_size=1)
 
-        self.sas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.ReLU())
-        self.sas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.ReLU())
+        self.sas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
+                                             nn.ReLU())
+        self.sas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
+                                              nn.ReLU())
         self.sas_rgb = nn.Conv1d(1024, 1, kernel_size=1)
         self.sas_flow = nn.Conv1d(1024, 1, kernel_size=1)
 
