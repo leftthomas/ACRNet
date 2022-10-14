@@ -1,6 +1,6 @@
 # RelationNet
 
-A PyTorch implementation of RelationNet based on ACM MM 2022 paper
+A PyTorch implementation of RelationNet based on CVPR 2023 paper
 [Mining Relations for Weakly-Supervised Action Localization]().
 
 ![Network Architecture](result/structure.png)
@@ -11,7 +11,7 @@ A PyTorch implementation of RelationNet based on ACM MM 2022 paper
 - [PyTorch](https://pytorch.org)
 
 ```
-conda install pytorch=1.11.0 torchvision torchaudio cudatoolkit=11.3 -c pytorch
+conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
 ```
 
 - [MMAction2](https://mmaction2.readthedocs.io)
@@ -53,7 +53,7 @@ data directory structure is organized as follows:
        ├── test                                  |       ├── validation           
            ├── video_test_0000004.mp4            |           ├── v__1vYKA7mNLI.mp4
            └──...                                |           └──...      
-   annotations.json                              | annotations_1.2.json, annotations_1.3.json
+   annotations.json                              |    annotations_1.2.json, annotations_1.3.json
 ```
 
 ## Usage
@@ -75,7 +75,7 @@ python main.py --data_name thumos14 --model_file result/thumos14.pth
 
 ## Benchmarks
 
-The models are trained on one NVIDIA GeForce RTX 2060 SUPER GPU (8G). All the hyper-parameters are the default values.
+The models are trained on one NVIDIA GeForce RTX 3090 GPU (24G). All the hyper-parameters are the default values.
 
 ### THUMOS14
 
