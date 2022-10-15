@@ -37,10 +37,9 @@ class Model(nn.Module):
         # [N, T, C]
         seg_score = (cas + aas) / 2
         seg_mask = temporal_clustering(seg_score)
-        act_score, refined_mask = mask_refining(seg_score, seg_mask)
-
-        # [N, C], action score is aggregated by segment score
-        act_score = torch.softmax((refined_mask * seg_score).mean(dim=1), dim=-1)
+        # [N, C]
+        # act_score, refined_mask = mask_refining(seg_score, seg_mask)
+        act_score = torch.mean(seg_score * seg_mask, dim=1)
 
         return act_score, seg_score
 
@@ -87,8 +86,7 @@ def mask_refining(seg_score, mask, soft=True):
     sort_value, sort_index = torch.sort(seg_score, dim=1, descending=True, stable=True)
     # [N, T]
     if soft:
-        ranks = torch.arange(start=2, end=t + 2, device=seg_score.device).reciprocal().view(-1, t).expand(n,
-                                                                                                          -1).contiguous()
+        ranks = torch.arange(2, t + 2, device=seg_score.device).reciprocal().view(-1, t).expand(n, -1).contiguous()
     else:
         ranks = torch.ones(n, t, device=seg_score.device)
     row_index = torch.arange(n, device=seg_score.device).view(n, -1).expand(-1, t).contiguous()
