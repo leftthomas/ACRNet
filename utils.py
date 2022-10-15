@@ -21,20 +21,19 @@ def parse_args():
     parser.add_argument('--cls_th', type=float, default=0.2, help='threshold for action classification')
     parser.add_argument('--iou_th', type=float, default=0.4, help='threshold for NMS IoU')
     parser.add_argument('--act_th', type=str, default='np.arange(0.0, 1.0, 0.1)', help='threshold for candidate frames')
-    parser.add_argument('--factor', type=int, default=11, help='used top n/factor segments for action prediction')
     parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
     parser.add_argument('--fps', type=int, default=25, help='fps for each video')
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
     parser.add_argument('--num_iter', type=int, default=2000, help='iterations of training')
     parser.add_argument('--eval_iter', type=int, default=100, help='iterations of evaluating')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of loading videos for training')
-    parser.add_argument('--init_lr', type=float, default=1e-4, help='initial learning rate')
-    parser.add_argument('--weight_decay', type=float, default=5e-4, help='weight decay for optimizer')
+    parser.add_argument('--init_lr', type=float, default=1e-3, help='initial learning rate')
+    parser.add_argument('--weight_decay', type=float, default=1e-4, help='weight decay for optimizer')
     parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
     parser.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
     parser.add_argument('--save_vis', action='store_true', default=False,
-                        help='save class activation sequence and frame similarity matrix or not')
+                        help='save class activation sequence or not')
 
     return init_args(parser.parse_args())
 
@@ -48,7 +47,6 @@ class Config(object):
         self.iou_th = args.iou_th
         self.act_th = eval(args.act_th)
         self.map_th = args.map_th
-        self.factor = args.factor
         self.num_seg = args.num_seg
         self.fps = args.fps
         self.rate = args.rate

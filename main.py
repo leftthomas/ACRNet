@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from mmaction.core.evaluation import ActivityNetLocalization
 from mmaction.localization import soft_nms
-from torch.optim import Adam
+from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -111,16 +111,16 @@ if __name__ == '__main__':
         save_loop(model, test_loader, 1)
 
     else:
+        model.train()
         train_data = VideoDataset(args.data_path, args.data_name, 'train', args.num_seg,
                                   args.batch_size * args.num_iter)
         train_loader = iter(DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers))
-        optimizer = Adam(model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
-        lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter)
+        optimizer = AdamW(model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
+        lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter, eta_min=1e-6)
 
         total_loss, total_num, metric_info['Loss'] = 0.0, 0, []
         train_bar = tqdm(range(1, args.num_iter + 1), initial=1, dynamic_ncols=True)
         for step in train_bar:
-            model.train()
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
             action_score, bkg_score, sas_rgb_score, sas_flow_score, act_index, _ = model(feat)
@@ -140,3 +140,4 @@ if __name__ == '__main__':
             if step % args.eval_iter == 0:
                 metric_info['Loss'].append('{:.3f}'.format(total_loss / total_num))
                 save_loop(model, test_loader, step)
+                model.train()
