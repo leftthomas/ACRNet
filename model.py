@@ -35,23 +35,22 @@ class Model(nn.Module):
         aas_rgb, aas_flow = self.aas_rgb_encoder(rgb).mT.contiguous(), self.aas_flow_encoder(flow).mT.contiguous()
         aas = torch.sigmoid(aas_rgb + aas_flow)
         # [N, T, C]
-        act_score = (cas + aas) / 2
+        seg_score = (cas + aas) / 2
+        seg_mask = temporal_clustering(seg_score)
+        act_score, refined_mask = mask_refining(seg_score, seg_mask)
 
-        act_mask = temporal_clustering(act_score)
+        # [N, C], action score is aggregated by segment score
+        act_score = torch.softmax((refined_mask * seg_score).mean(dim=1), dim=-1)
 
-        # [N, C], action score is aggregated by cas
-        act_score = torch.softmax(torch.gather(cas, dim=1, index=act_index).mean(dim=1), dim=-1)
-        bkg_score = torch.softmax(torch.gather(cas, dim=1, index=bkg_index).mean(dim=1), dim=-1)
-
-        return act_score, bkg_score, sas_rgb_score.squeeze(dim=-1), sas_flow_score.squeeze(dim=-1), act_index, seg_score
+        return act_score, seg_score
 
 
-def temporal_clustering(act_score, soft=True):
-    n, t, c = act_score.shape
+def temporal_clustering(seg_score, soft=True):
+    n, t, c = seg_score.shape
     # [N*C, T]
-    act_score = act_score.mT.contiguous().view(-1, t)
-    sort_value, sort_index = torch.sort(act_score, dim=-1, descending=True, stable=True)
-    mask = torch.zeros_like(act_score)
+    seg_score = seg_score.mT.contiguous().view(-1, t)
+    sort_value, sort_index = torch.sort(seg_score, dim=-1, descending=True, stable=True)
+    mask = torch.zeros_like(seg_score)
     row_index = torch.arange(mask.shape[0], device=mask.device)
     # the index of the largest value is inited as positive
     mask[row_index, sort_index[:, 0]] = 1
@@ -81,6 +80,33 @@ def temporal_clustering(act_score, soft=True):
     # [N, T, C]
     mask = mask.view(n, c, t).mT.contiguous()
     return mask
+
+
+def mask_refining(seg_score, mask, soft=True):
+    n, t, c = seg_score.shape
+    sort_value, sort_index = torch.sort(seg_score, dim=1, descending=True, stable=True)
+    # [N, T]
+    if soft:
+        ranks = torch.arange(start=2, end=t + 2, device=seg_score.device).reciprocal().view(-1, t).expand(n,
+                                                                                                          -1).contiguous()
+    else:
+        ranks = torch.ones(n, t, device=seg_score.device)
+    row_index = torch.arange(n, device=seg_score.device).view(n, -1).expand(-1, t).contiguous()
+    # [N, C]
+    act_score = torch.zeros(n, c, device=seg_score.device)
+    for i in range(c):
+        # [N, T]
+        index, value = sort_index[:, :, i], sort_value[:, :, i]
+        tmp_mask = mask[:, :, i][row_index, index]
+        tmp_rank = ranks * tmp_mask
+        tmp_score = tmp_rank * value
+        # [N]
+        tol_rank = torch.sum(tmp_rank, dim=-1)
+        tol_rank = torch.where(torch.eq(tol_rank, 0.0), torch.ones_like(tol_rank), tol_rank)
+        act_score[:, i] = tmp_score.sum(dim=-1) / tol_rank
+    refined_mask = torch.ge(seg_score, act_score.unsqueeze(dim=1)).float() * mask
+
+    return act_score, refined_mask
 
 
 def sas_label(act_index, num_seg, label):
