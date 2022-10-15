@@ -21,7 +21,7 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, seg_score = net(data)
+            act_score, _, seg_score = net(data)
             # [C],  [T, C]
             act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
 
@@ -123,8 +123,8 @@ if __name__ == '__main__':
         for step in train_bar:
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, _ = model(feat)
-            loss = cross_entropy(action_score, label)
+            action_score, background_score, _ = model(feat)
+            loss = cross_entropy(action_score, background_score, label)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

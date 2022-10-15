@@ -40,8 +40,8 @@ class Model(nn.Module):
         # [N, C]
         # act_score, refined_mask = mask_refining(seg_score, seg_mask)
         act_score = torch.mean(seg_score * seg_mask, dim=1)
-
-        return act_score, seg_score
+        bkg_score = torch.mean(seg_score * (1.0 - seg_mask), dim=1)
+        return act_score, bkg_score, seg_score
 
 
 def temporal_clustering(seg_score, soft=True):
@@ -107,11 +107,12 @@ def mask_refining(seg_score, mask, soft=True):
     return act_score, refined_mask
 
 
-def cross_entropy(act_score, label, eps=1e-8):
+def cross_entropy(act_score, bkg_score, label, eps=1e-8):
     act_num = torch.sum(label, dim=-1)
     act_num = torch.where(torch.eq(act_num, 0.0), torch.ones_like(act_num), act_num)
     act_loss = (-(label * torch.log(act_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
-    return act_loss
+    bkg_loss = (-(label * torch.log(1.0 - bkg_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
+    return act_loss + bkg_loss
 
 
 # ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
