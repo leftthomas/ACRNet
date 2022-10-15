@@ -109,30 +109,11 @@ def mask_refining(seg_score, mask, soft=True):
     return act_score, refined_mask
 
 
-def sas_label(act_index, num_seg, label):
-    masks = []
-    for i in range(act_index.shape[0]):
-        pos_index = act_index[i][:, label[i].bool()].flatten()
-        mask = torch.zeros(num_seg, device=act_index.device)
-        mask[pos_index] = 1.0
-        masks.append(mask)
-    return torch.stack(masks)
-
-
-def divide_label(label):
-    pos_num = label.sum(dim=-1)
-    neg_num = (1.0 - label).sum(dim=-1)
-    # avoid divide by zero
-    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
-    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
-    return pos_num, neg_num
-
-
-def cross_entropy(act_score, bkg_score, label, eps=1e-8):
-    act_num, bkg_num = divide_label(label)
+def cross_entropy(act_score, label, eps=1e-8):
+    act_num = torch.sum(label, dim=-1)
+    act_num = torch.where(torch.eq(act_num, 0.0), torch.ones_like(act_num), act_num)
     act_loss = (-(label * torch.log(act_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
-    bkg_loss = (-torch.log(1.0 - bkg_score + eps)).mean()
-    return act_loss + bkg_loss
+    return act_loss
 
 
 # ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
