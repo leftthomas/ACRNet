@@ -39,8 +39,14 @@ class Model(nn.Module):
         seg_mask = temporal_clustering(seg_score)
         # [N, C]
         # act_score, refined_mask = mask_refining(seg_score, seg_mask)
-        act_score = torch.mean(seg_score * seg_mask, dim=1)
-        bkg_score = torch.mean(seg_score * (1.0 - seg_mask), dim=1)
+
+        act_num = torch.sum(seg_mask, dim=1)
+        act_num = torch.where(torch.eq(act_num, 0.0), torch.ones_like(act_num), act_num)
+        bkg_num = torch.sum(1.0 - seg_mask, dim=1)
+        bkg_num = torch.where(torch.eq(bkg_num, 0.0), torch.ones_like(bkg_num), bkg_num)
+
+        act_score = torch.sum(seg_score * seg_mask, dim=1) / act_num
+        bkg_score = torch.sum(seg_score * (1.0 - seg_mask), dim=1) / bkg_num
         return act_score, bkg_score, seg_score
 
 
