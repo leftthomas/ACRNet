@@ -94,17 +94,19 @@ def mask_refining(seg_score, seg_mask, soft=True):
     for i in range(c):
         # [N, T]
         index, value = sort_index[:, :, i], sort_value[:, :, i]
-        mask = seg_mask[:, :, i]
+        score, mask = seg_score[:, :, i], seg_mask[:, :, i]
 
         # generate pseudo action score as threshold
         if soft:
-            ranks = torch.ones_like(tmp_mask)
+            weights = torch.ones_like(mask)
             for j in range(n):
-                rank = torch.arange(1, tol_rank[j] + 1, device=seg_mask.device).reciprocal()
-                # ranks[j, tmp_mask[j, :].bool()] = rank
+                rank = torch.arange(1, total_num[j, i] + 1, device=seg_mask.device).reciprocal()
+                weights[j, index[j, mask[j, :].bool()]] = rank
+            pos_num = torch.clamp_min(torch.sum(mask * weights, dim=-1), 1.0)
+            act_score[:, i] = torch.sum(score * mask * weights, dim=-1) / pos_num
         else:
             pos_num = torch.clamp_min(total_num[:, i], 1.0)
-            act_score[:, i] = torch.sum(seg_score[:, :, i] * mask, dim=-1) / pos_num
+            act_score[:, i] = torch.sum(score * mask, dim=-1) / pos_num
 
     # suppress each segment in many actions concurrently
     refined_mask = torch.ge(seg_score, act_score.unsqueeze(dim=1)).float() * seg_mask
