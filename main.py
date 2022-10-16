@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, cross_entropy
+from model import Model, cross_entropy, generalized_cross_entropy
 from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred
 
 
@@ -21,7 +21,7 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, _, seg_score = net(data)
+            act_score, _, _, seg_score, _ = net(data)
             # [C],  [T, C]
             act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
 
@@ -123,8 +123,10 @@ if __name__ == '__main__':
         for step in train_bar:
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, background_score, _ = model(feat)
-            loss = cross_entropy(action_score, background_score, label)
+            action_score, background_score, aas_score, _, segment_mask = model(feat)
+            cas_loss = cross_entropy(action_score, background_score, label)
+            aas_loss = generalized_cross_entropy(aas_score, label, segment_mask)
+            loss = cas_loss + aas_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

@@ -45,9 +45,9 @@ class Model(nn.Module):
         bkg_num = torch.sum(1.0 - seg_mask, dim=1)
         bkg_num = torch.where(torch.eq(bkg_num, 0.0), torch.ones_like(bkg_num), bkg_num)
 
-        act_score = torch.sum(seg_score * seg_mask, dim=1) / act_num
-        bkg_score = torch.sum(seg_score * (1.0 - seg_mask), dim=1) / bkg_num
-        return act_score, bkg_score, seg_score
+        act_score = torch.softmax(torch.sum((cas_rgb + cas_flow) * seg_mask, dim=1) / act_num, dim=-1)
+        bkg_score = torch.softmax(torch.sum((cas_rgb + cas_flow) * (1.0 - seg_mask), dim=1) / bkg_num, dim=-1)
+        return act_score, bkg_score, aas, seg_score, seg_mask
 
 
 def temporal_clustering(seg_score, soft=True):
@@ -122,8 +122,20 @@ def cross_entropy(act_score, bkg_score, label, eps=1e-8):
 
 
 # ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
-def generalized_cross_entropy(score, label, q=0.7, eps=1e-8):
-    pos_num, neg_num = divide_label(label)
-    pos_loss = ((((1.0 - (score + eps) ** q) / q) * label).sum(dim=-1) / pos_num).mean(dim=0)
-    neg_loss = ((((1.0 - (1.0 - score + eps) ** q) / q) * (1.0 - label)).sum(dim=-1) / neg_num).mean(dim=0)
+def generalized_cross_entropy(aas_score, label, seg_mask, q=0.7, eps=1e-8):
+    n, t, c = seg_mask.shape
+    # [N, T]
+    mask = torch.zeros(n, t, device=seg_mask.device)
+    for i in range(n):
+        mask[i, :] = torch.sum(seg_mask[i, :, label[i, :].bool()], dim=-1)
+    # [N, T, 1]
+    mask = torch.clamp_max(mask, 1.0).unsqueeze(dim=-1)
+    # [N, 1, 1]
+    pos_num = torch.sum(mask, dim=1, keepdim=True)
+    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
+    neg_num = torch.sum(1.0 - mask, dim=1, keepdim=True)
+    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
+
+    pos_loss = ((((1.0 - (aas_score + eps) ** q) / q) * mask).sum(dim=-1) / pos_num).mean(dim=0)
+    neg_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * (1.0 - mask)).sum(dim=-1) / neg_num).mean(dim=0)
     return pos_loss + neg_loss
