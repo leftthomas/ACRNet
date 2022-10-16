@@ -37,9 +37,9 @@ class Model(nn.Module):
         # [N, T, C]
         seg_score = (cas + aas) / 2
         seg_mask = temporal_clustering(seg_score)
-        # [N, C]
-        # act_score, refined_mask = mask_refining(seg_score, seg_mask)
+        seg_mask = mask_refining(seg_score, seg_mask)
 
+        # [N, C]
         act_num = torch.sum(seg_mask, dim=1)
         act_num = torch.where(torch.eq(act_num, 0.0), torch.ones_like(act_num), act_num)
         bkg_num = torch.sum(1.0 - seg_mask, dim=1)
@@ -91,10 +91,6 @@ def mask_refining(seg_score, mask, soft=True):
     n, t, c = seg_score.shape
     sort_value, sort_index = torch.sort(seg_score, dim=1, descending=True, stable=True)
     # [N, T]
-    if soft:
-        ranks = torch.arange(2, t + 2, device=seg_score.device).reciprocal().view(-1, t).expand(n, -1).contiguous()
-    else:
-        ranks = torch.ones(n, t, device=seg_score.device)
     row_index = torch.arange(n, device=seg_score.device).view(n, -1).expand(-1, t).contiguous()
     # [N, C]
     act_score = torch.zeros(n, c, device=seg_score.device)
@@ -102,15 +98,24 @@ def mask_refining(seg_score, mask, soft=True):
         # [N, T]
         index, value = sort_index[:, :, i], sort_value[:, :, i]
         tmp_mask = mask[:, :, i][row_index, index]
-        tmp_rank = ranks * tmp_mask
-        tmp_score = tmp_rank * value
+        tmp_score = tmp_mask * value
         # [N]
-        tol_rank = torch.sum(tmp_rank, dim=-1)
+        tol_rank = torch.sum(tmp_mask, dim=-1)
         tol_rank = torch.where(torch.eq(tol_rank, 0.0), torch.ones_like(tol_rank), tol_rank)
+        # generate pseudo action score as threshold
+        if soft:
+            ranks = torch.ones_like(tmp_mask)
+            for j in range(n):
+                rank = torch.arange(1, tol_rank[j] + 1, device=mask.device).reciprocal()
+                ranks[j, tmp_mask[j, :].bool()] = rank
+        else:
+            ranks = torch.ones_like(tmp_mask)
+
         act_score[:, i] = tmp_score.sum(dim=-1) / tol_rank
+    # suppress each segment in many actions concurrently
     refined_mask = torch.ge(seg_score, act_score.unsqueeze(dim=1)).float() * mask
 
-    return act_score, refined_mask
+    return refined_mask
 
 
 def cross_entropy(act_score, bkg_score, label, eps=1e-8):
