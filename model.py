@@ -30,12 +30,14 @@ class Model(nn.Module):
         rgb, flow = x[:, :, :1024].mT.contiguous(), x[:, :, 1024:].mT.contiguous()
         # [N, T, C], class activation sequence
         cas_rgb, cas_flow = self.cas_rgb_encoder(rgb).mT.contiguous(), self.cas_flow_encoder(flow).mT.contiguous()
-        cas = torch.softmax(cas_rgb + cas_flow, dim=-1)
+        cas = cas_rgb + cas_flow
+        cas_score = torch.softmax(cas, dim=-1)
         # [N, T, 1], action activation sequence
         aas_rgb, aas_flow = self.aas_rgb_encoder(rgb).mT.contiguous(), self.aas_flow_encoder(flow).mT.contiguous()
-        aas = torch.sigmoid(aas_rgb + aas_flow)
+        aas = aas_rgb + aas_flow
+        aas_score = torch.sigmoid(aas)
         # [N, T, C]
-        seg_score = (cas + aas) / 2
+        seg_score = (cas_score + aas_score) / 2
         seg_mask = temporal_clustering(seg_score)
         seg_mask = mask_refining(seg_score, seg_mask)
 
@@ -43,9 +45,9 @@ class Model(nn.Module):
         act_num = torch.clamp_min(torch.sum(seg_mask, dim=1), 1.0)
         bkg_num = torch.clamp_min(torch.sum(1.0 - seg_mask, dim=1), 1.0)
 
-        act_score = torch.softmax(torch.sum((cas_rgb + cas_flow) * seg_mask, dim=1) / act_num, dim=-1)
-        bkg_score = torch.softmax(torch.sum((cas_rgb + cas_flow) * (1.0 - seg_mask), dim=1) / bkg_num, dim=-1)
-        return act_score, bkg_score, aas, seg_score, seg_mask
+        act_score = torch.softmax(torch.sum(cas * seg_mask, dim=1) / act_num, dim=-1)
+        bkg_score = torch.softmax(torch.sum(cas * (1.0 - seg_mask), dim=1) / bkg_num, dim=-1)
+        return act_score, bkg_score, aas_score, seg_score, seg_mask
 
 
 def temporal_clustering(seg_score, soft=True):
