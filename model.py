@@ -39,14 +39,8 @@ class Model(nn.Module):
         # [N, T, C]
         seg_score = (cas_score + aas_score) / 2
         seg_mask = temporal_clustering(seg_score)
-        seg_mask = mask_refining(seg_score, cas, seg_mask)
-
         # [N, C]
-        act_num = torch.clamp_min(torch.sum(seg_mask, dim=1), 1.0)
-        bkg_num = torch.clamp_min(torch.sum(1.0 - seg_mask, dim=1), 1.0)
-
-        act_score = torch.softmax(torch.sum(cas * seg_mask, dim=1) / act_num, dim=-1)
-        bkg_score = torch.softmax(torch.sum(cas * (1.0 - seg_mask), dim=1) / bkg_num, dim=-1)
+        act_score, bkg_score = calculate_score(seg_score, seg_mask, cas)
         return act_score, bkg_score, aas_score, seg_score, seg_mask
 
 
@@ -87,66 +81,28 @@ def temporal_clustering(seg_score, soft=True):
     return mask
 
 
-def mask_refining(seg_score, cas, seg_mask, soft=True):
-    # n, t, c = seg_score.shape
-    # sort_value, sort_index = torch.sort(seg_score, dim=-1, descending=True, stable=True)
-    # # [N, T]
-    # ranks = torch.arange(2, t+2, device=seg_score.device).reciprocal().view(1, -1).expand(n, -1).contiguous()
-    # row_index = torch.arange(n, device=seg_score.device).view(-1, 1).expand(-1, t).contiguous()
-    # # [N, C]
-    # act_score = torch.zeros(n, c, device=seg_score.device)
-    # mean_score = torch.zeros(n, c, device=seg_score.device)
-    #
-    # for i in range(c):
-    #     # [N, T]
-    #     index, value = sort_index[:, :, i], sort_value[:, :, i]
-    #     mask = seg_mask[:, :, i][row_index, index]
-    #     cs = cas[:, :, i][row_index, index]
-    #     rank = ranks*mask
-    #     # [N]
-    #     tmp_score = (cs*rank).sum(dim=-1) / torch.clamp_min(rank.sum(dim=-1), 1.0)
-    #     act_score[:, i] = tmp_score
-    #     for j in range(n):
-    #         ref_score = tmp_score[j]
-    #         ref_val = cs[j][mask[j].bool()]
-    #         sort_val = value[j][mask[j].bool()]
-    #         if ref_val.shape[0] > 0:
-    #             cum_cnts = torch.arange(1, mask[j].sum()+1, device=seg_score.device)
-    #             cum_scores = torch.cumsum(ref_val, dim=-1) / cum_cnts
-    #             tmp_mask = torch.ge(cum_scores, ref_score).long()
-    #             mean_score[j, i] = sort_val[min(tmp_mask.sum()-1, sort_val.shape[0]-1)]
-    #         else:
-    #             mean_score[j, i] = 0.0
-    # max_mask = torch.ge(seg_score, mean_score.unsqueeze(dim=1)).float()
-    # refined_mask = seg_mask*max_mask
-    # return refined_mask, act_score
-
+def calculate_score(seg_score, seg_mask, cas, soft=True):
     n, t, c = seg_score.shape
+    # [N*C, T]
+    seg_score = seg_score.mT.contiguous().view(-1, t)
     sort_value, sort_index = torch.sort(seg_score, dim=-1, descending=True, stable=True)
-    # [N, C]
-    total_num = torch.count_nonzero(seg_mask, dim=1)
-    act_score = torch.zeros(n, c, device=seg_score.device)
-    for i in range(c):
-        # [N, T]
-        index, value = sort_index[:, :, i], sort_value[:, :, i]
-        score, mask = seg_score[:, :, i], seg_mask[:, :, i]
-
-        # generate pseudo action score as threshold
-        if soft:
-            weights = torch.ones_like(mask)
-            for j in range(n):
-                rank = torch.arange(1, total_num[j, i] + 1, device=seg_mask.device).reciprocal()
-                weights[j, index[j, mask[j, :].bool()]] = rank
-            pos_num = torch.clamp_min(torch.sum(mask * weights, dim=-1), 1.0)
-            act_score[:, i] = torch.sum(score * mask * weights, dim=-1) / pos_num
-        else:
-            pos_num = torch.clamp_min(total_num[:, i], 1.0)
-            act_score[:, i] = torch.sum(score * mask, dim=-1) / pos_num
-
-    # suppress each segment in many actions concurrently
-    refined_mask = torch.ge(seg_score, act_score.unsqueeze(dim=1)).float() * seg_mask
-
-    return refined_mask
+    seg_mask = seg_mask.mT.contiguous().view(-1, t)
+    row_index = torch.arange(seg_mask.shape[0], device=seg_mask.device).view(-1, 1).expand(-1, t).contiguous()
+    sort_mask = seg_mask[row_index, sort_index]
+    cas = cas.mT.contiguous().view(-1, t)
+    sort_cas = cas[row_index, sort_index]
+    if soft:
+        # [1, T]
+        rank = torch.arange(1, t + 1, device=seg_score.device).unsqueeze(dim=0).reciprocal() ** 2
+    else:
+        rank = torch.ones(t, device=seg_score.device).unsqueeze(dim=0)
+    # [N*C]
+    act_num = (rank * sort_mask).sum(dim=-1)
+    act_score = (sort_cas * rank * sort_mask).sum(dim=-1) / torch.clamp_min(act_num, 1.0)
+    bkg_num = (1.0 - sort_mask).sum(dim=-1)
+    bkg_score = (sort_cas * (1.0 - sort_mask)).sum(dim=-1) / torch.clamp_min(bkg_num, 1.0)
+    act_score, bkg_score = torch.softmax(act_score.view(n, c), dim=-1), torch.softmax(bkg_score.view(n, c), dim=-1)
+    return act_score, bkg_score
 
 
 def cross_entropy(act_score, bkg_score, label, eps=1e-8):
