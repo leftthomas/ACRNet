@@ -71,8 +71,8 @@ def temporal_clustering(seg_score, soft=True):
         neg_list = torch.where(~condition, value, torch.zeros_like(value))
         # update centers
         if soft:
-            pos_num = pos_num + condition.float() / (i + 1)
-            pos_sum = pos_sum + pos_list / (i + 1)
+            pos_num = pos_num + condition.float() / ((i + 1) ** 2)
+            pos_sum = pos_sum + pos_list / ((i + 1) ** 2)
         else:
             pos_num = pos_num + condition.float()
             pos_sum = pos_sum + pos_list
