@@ -44,7 +44,7 @@ class Model(nn.Module):
         return act_score, bkg_score, aas_score, seg_score, seg_mask
 
 
-def temporal_clustering(seg_score, soft=True):
+def temporal_clustering(seg_score, r=3):
     n, t, c = seg_score.shape
     # [N*C, T]
     seg_score = seg_score.mT.contiguous().view(-1, t)
@@ -66,12 +66,8 @@ def temporal_clustering(seg_score, soft=True):
         pos_list = torch.where(condition, value, torch.zeros_like(value))
         neg_list = torch.where(~condition, value, torch.zeros_like(value))
         # update centers
-        if soft:
-            pos_num = pos_num + condition.float() / ((i + 1) ** 2)
-            pos_sum = pos_sum + pos_list / ((i + 1) ** 2)
-        else:
-            pos_num = pos_num + condition.float()
-            pos_sum = pos_sum + pos_list
+        pos_num = pos_num + condition.float() / ((i + 1) ** r)
+        pos_sum = pos_sum + pos_list / ((i + 1) ** r)
         neg_num = neg_num + (~condition).float()
         neg_sum = neg_sum + neg_list
         # update mask
@@ -81,7 +77,7 @@ def temporal_clustering(seg_score, soft=True):
     return mask
 
 
-def calculate_score(seg_score, seg_mask, cas, soft=True):
+def calculate_score(seg_score, seg_mask, cas, r=3):
     n, t, c = seg_score.shape
     # [N*C, T]
     seg_score = seg_score.mT.contiguous().view(-1, t)
@@ -91,11 +87,8 @@ def calculate_score(seg_score, seg_mask, cas, soft=True):
     sort_mask = seg_mask[row_index, sort_index]
     cas = cas.mT.contiguous().view(-1, t)
     sort_cas = cas[row_index, sort_index]
-    if soft:
-        # [1, T]
-        rank = torch.arange(1, t + 1, device=seg_score.device).unsqueeze(dim=0).reciprocal() ** 2
-    else:
-        rank = torch.ones(t, device=seg_score.device).unsqueeze(dim=0)
+    # [1, T]
+    rank = torch.arange(1, t + 1, device=seg_score.device).unsqueeze(dim=0).reciprocal() ** r
     # [N*C]
     act_num = (rank * sort_mask).sum(dim=-1)
     act_score = (sort_cas * rank * sort_mask).sum(dim=-1) / torch.clamp_min(act_num, 1.0)
