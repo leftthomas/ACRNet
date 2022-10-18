@@ -44,7 +44,7 @@ class Model(nn.Module):
         return act_score, bkg_score, aas_score, seg_score, seg_mask
 
 
-def temporal_clustering(seg_score, r=3):
+def temporal_clustering(seg_score, r=4):
     n, t, c = seg_score.shape
     # [N*C, T]
     seg_score = seg_score.mT.contiguous().view(-1, t)
@@ -77,7 +77,7 @@ def temporal_clustering(seg_score, r=3):
     return mask
 
 
-def calculate_score(seg_score, seg_mask, cas, r=3):
+def calculate_score(seg_score, seg_mask, cas, r=4):
     n, t, c = seg_score.shape
     # [N*C, T]
     seg_score = seg_score.mT.contiguous().view(-1, t)
