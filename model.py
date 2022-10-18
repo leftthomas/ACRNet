@@ -14,18 +14,15 @@ def weights_init(m):
 class CCA(nn.Module):
     def __init__(self, feat_dim):
         super(CCA, self).__init__()
-        self.bit_wise_attn = nn.Sequential(
-            nn.Conv1d(feat_dim, feat_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5))
-        self.channel_conv = nn.Sequential(
-            nn.Conv1d(feat_dim, feat_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5))
-        self.channel_avg = nn.AdaptiveAvgPool1d(1)
+        self.global_context = nn.Sequential(nn.AdaptiveAvgPool1d(1), nn.Conv1d(feat_dim, feat_dim, 3, padding=1),
+                                            nn.Dropout(p=0.5), nn.ReLU())
+        self.local_context = nn.Sequential(nn.Conv1d(feat_dim, feat_dim, 3, padding=1), nn.Dropout(p=0.5), nn.ReLU())
 
     def forward(self, global_feat, local_feat):
-        channelfeat = self.channel_avg(global_feat)
-        channel_attn = self.channel_conv(channelfeat)
-        bit_wise_attn = self.bit_wise_attn(local_feat)
-        filter_feat = torch.sigmoid(bit_wise_attn * channel_attn) * global_feat
-        return filter_feat
+        global_context = self.global_context(global_feat)
+        local_context = self.local_context(local_feat)
+        enhanced_feat = torch.sigmoid(global_context * local_context) * global_feat
+        return enhanced_feat
 
 
 class Model(nn.Module):
@@ -46,7 +43,7 @@ class Model(nn.Module):
                                               nn.ReLU(), nn.Conv1d(1024, 1, kernel_size=1))
         self.apply(weights_init)
 
-    def forward(self, x, with_cca=False):
+    def forward(self, x, with_cca=True):
         # [N, D, T]
         rgb, flow = x[:, :, :1024].mT.contiguous(), x[:, :, 1024:].mT.contiguous()
         if with_cca:
