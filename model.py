@@ -10,9 +10,30 @@ def weights_init(m):
             m.bias.data.fill_(0)
 
 
+# ref: Cross-modal Consensus Network for Weakly Supervised Temporal Action Localization (ACM MM 2021)
+class CCA(nn.Module):
+    def __init__(self, feat_dim):
+        super(CCA, self).__init__()
+        self.bit_wise_attn = nn.Sequential(
+            nn.Conv1d(feat_dim, feat_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5))
+        self.channel_conv = nn.Sequential(
+            nn.Conv1d(feat_dim, feat_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5))
+        self.channel_avg = nn.AdaptiveAvgPool1d(1)
+
+    def forward(self, global_feat, local_feat):
+        channelfeat = self.channel_avg(global_feat)
+        channel_attn = self.channel_conv(channelfeat)
+        bit_wise_attn = self.bit_wise_attn(local_feat)
+        filter_feat = torch.sigmoid(bit_wise_attn * channel_attn) * global_feat
+        return filter_feat
+
+
 class Model(nn.Module):
     def __init__(self, num_classes):
         super(Model, self).__init__()
+
+        self.rgb_cca = CCA(1024)
+        self.flow_cca = CCA(1024)
 
         self.cas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
                                              nn.ReLU(), nn.Conv1d(1024, num_classes, kernel_size=1))
@@ -25,9 +46,12 @@ class Model(nn.Module):
                                               nn.ReLU(), nn.Conv1d(1024, 1, kernel_size=1))
         self.apply(weights_init)
 
-    def forward(self, x):
+    def forward(self, x, with_cca=False):
         # [N, D, T]
         rgb, flow = x[:, :, :1024].mT.contiguous(), x[:, :, 1024:].mT.contiguous()
+        if with_cca:
+            rgb, flow = self.rgb_cca(rgb, flow), self.flow_cca(flow, rgb)
+
         # [N, T, C], class activation sequence
         cas_rgb, cas_flow = self.cas_rgb_encoder(rgb).mT.contiguous(), self.cas_flow_encoder(flow).mT.contiguous()
         cas = cas_rgb + cas_flow
@@ -123,3 +147,5 @@ def generalized_cross_entropy(aas_score, label, seg_mask, q=0.7, eps=1e-8):
     pos_loss = ((((1.0 - (aas_score + eps) ** q) / q) * mask).sum(dim=-1) / pos_num).mean(dim=0)
     neg_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * (1.0 - mask)).sum(dim=-1) / neg_num).mean(dim=0)
     return pos_loss + neg_loss
+
+# def contrastive_mining():

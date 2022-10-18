@@ -18,9 +18,9 @@ def parse_args():
     parser.add_argument('--save_path', type=str, default='result')
     parser.add_argument('--data_name', type=str, default='thumos14',
                         choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
-    parser.add_argument('--cls_th', type=float, default=0.2, help='threshold for action classification')
+    parser.add_argument('--cls_th', type=float, default=0.15, help='threshold for action classification')
     parser.add_argument('--iou_th', type=float, default=0.4, help='threshold for NMS IoU')
-    parser.add_argument('--act_th', type=str, default='np.arange(0.0, 1.0, 0.1)', help='threshold for candidate frames')
+    parser.add_argument('--act_th', type=str, default='np.arange(0.1, 1.0, 0.1)', help='threshold for candidate frames')
     parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
     parser.add_argument('--fps', type=int, default=25, help='fps for each video')
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
