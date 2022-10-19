@@ -27,21 +27,21 @@ class MCA(nn.Module):
 
     def forward(self, rgb, flow):
         rgb, flow = rgb.mT.contiguous(), flow.mT.contiguous()
-        n, l, d = rgb.shape
-        # [N, H, L, D/H]
+        n, t, d = rgb.shape
+        # [N, H, T, D/H]
         o_rgb = F.normalize(torch.matmul(rgb.unsqueeze(dim=1), self.rgb_proj), dim=-1)
         o_flow = F.normalize(torch.matmul(flow.unsqueeze(dim=1), self.flow_proj), dim=-1)
-        # [N, H, L, L]
-        atte = torch.matmul(torch.matmul(o_rgb, self.atte), o_flow.transpose(-1, -2))
+        # [N, H, T, T]
+        atte = torch.matmul(torch.matmul(o_rgb, self.atte), o_flow.mT.contiguous())
         rgb_atte = torch.softmax(atte, dim=-1)
-        flow_atte = torch.softmax(atte.transpose(-1, -2), dim=-1)
+        flow_atte = torch.softmax(atte.mT.contiguous(), dim=-1)
 
-        # [N, H, L, D/H]
+        # [N, H, T, D/H]
         e_rgb = F.gelu(torch.matmul(rgb_atte, o_rgb))
         e_flow = F.gelu(torch.matmul(flow_atte, o_flow))
-        # [N, L, D]
-        f_rgb = torch.tanh(e_rgb.transpose(1, 2).reshape(n, l, -1) + rgb)
-        f_flow = torch.tanh(e_flow.transpose(1, 2).reshape(n, l, -1) + flow)
+        # [N, T, D]
+        f_rgb = torch.tanh(e_rgb.mT.contiguous().reshape(n, t, -1) + rgb)
+        f_flow = torch.tanh(e_flow.mT.contiguous().reshape(n, t, -1) + flow)
 
         f_rgb, f_flow = f_rgb.mT.contiguous(), f_flow.mT.contiguous()
         return f_rgb, f_flow
