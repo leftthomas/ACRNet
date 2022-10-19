@@ -29,6 +29,8 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of loading videos for training')
     parser.add_argument('--init_lr', type=float, default=1e-4, help='initial learning rate')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='weight decay for optimizer')
+    parser.add_argument('--lambda_1', type=float, default=1.0, help='loss weight for aas loss')
+    parser.add_argument('--lambda_2', type=float, default=1.0, help='loss weight for contrast loss')
     parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
     parser.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
@@ -55,6 +57,8 @@ class Config(object):
         self.batch_size = args.batch_size
         self.init_lr = args.init_lr
         self.weight_decay = args.weight_decay
+        self.lambda_1 = args.lambda_1
+        self.lambda_2 = args.lambda_2
         self.workers = args.workers
         self.model_file = args.model_file
         self.save_vis = args.save_vis

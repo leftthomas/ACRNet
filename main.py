@@ -131,7 +131,8 @@ if __name__ == '__main__':
             cas_attend_loss = cross_entropy(act_attend_score, bkg_attend_score, label)
             aas_attend_loss = generalized_cross_entropy(aas_attend_score, label, seg_attend_mask)
             contrastive_loss = contrastive_mining(seg_score, seg_attend_score, seg_mask, seg_attend_mask, label)
-            loss = cas_loss + aas_loss + cas_attend_loss + aas_attend_loss + 1.0 * contrastive_loss
+            loss = cas_loss + cas_attend_loss + args.lambda_1 * (
+                    aas_loss + aas_attend_loss) + args.lambda_2 * contrastive_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
