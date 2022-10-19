@@ -1,5 +1,7 @@
+import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 def weights_init(m):
@@ -10,28 +12,46 @@ def weights_init(m):
             m.bias.data.fill_(0)
 
 
-# ref: Cross-modal Consensus Network for Weakly Supervised Temporal Action Localization (ACM MM 2021)
-class CCA(nn.Module):
-    def __init__(self, feat_dim):
-        super(CCA, self).__init__()
-        self.global_context = nn.Sequential(nn.AdaptiveAvgPool1d(1), nn.Conv1d(feat_dim, feat_dim, 3, padding=1),
-                                            nn.Dropout(p=0.5), nn.ReLU())
-        self.local_context = nn.Sequential(nn.Conv1d(feat_dim, feat_dim, 3, padding=1), nn.Dropout(p=0.5), nn.ReLU())
+# ref: Weakly-supervised Temporal Action Localization with Multi-head Cross-modal Attention (PRICAI 2022)
+class MCA(nn.Module):
+    def __init__(self, feat_dim, num_head=4):
+        super(MCA, self).__init__()
+        self.rgb_proj = nn.Parameter(torch.empty(num_head, feat_dim, feat_dim // num_head))
+        self.flow_proj = nn.Parameter(torch.empty(num_head, feat_dim, feat_dim // num_head))
+        self.atte = nn.Parameter(torch.empty(num_head, feat_dim // num_head, feat_dim // num_head))
 
-    def forward(self, global_feat, local_feat):
-        global_context = self.global_context(global_feat)
-        local_context = self.local_context(local_feat)
-        enhanced_feat = torch.sigmoid(global_context * local_context) * global_feat
-        return enhanced_feat
+        nn.init.uniform_(self.rgb_proj, -math.sqrt(feat_dim), math.sqrt(feat_dim))
+        nn.init.uniform_(self.flow_proj, -math.sqrt(feat_dim), math.sqrt(feat_dim))
+        nn.init.uniform_(self.atte, -math.sqrt(feat_dim // num_head), math.sqrt(feat_dim // num_head))
+        self.num_head = num_head
+
+    def forward(self, rgb, flow):
+        rgb, flow = rgb.mT.contiguous(), flow.mT.contiguous()
+        n, l, d = rgb.shape
+        # [N, H, L, D/H]
+        o_rgb = F.normalize(torch.matmul(rgb.unsqueeze(dim=1), self.rgb_proj), dim=-1)
+        o_flow = F.normalize(torch.matmul(flow.unsqueeze(dim=1), self.flow_proj), dim=-1)
+        # [N, H, L, L]
+        atte = torch.matmul(torch.matmul(o_rgb, self.atte), o_flow.transpose(-1, -2))
+        rgb_atte = torch.softmax(atte, dim=-1)
+        flow_atte = torch.softmax(atte.transpose(-1, -2), dim=-1)
+
+        # [N, H, L, D/H]
+        e_rgb = F.gelu(torch.matmul(rgb_atte, o_rgb))
+        e_flow = F.gelu(torch.matmul(flow_atte, o_flow))
+        # [N, L, D]
+        f_rgb = torch.tanh(e_rgb.transpose(1, 2).reshape(n, l, -1) + rgb)
+        f_flow = torch.tanh(e_flow.transpose(1, 2).reshape(n, l, -1) + flow)
+
+        f_rgb, f_flow = f_rgb.mT.contiguous(), f_flow.mT.contiguous()
+        return f_rgb, f_flow
 
 
 class Model(nn.Module):
     def __init__(self, num_classes):
         super(Model, self).__init__()
 
-        self.rgb_cca = CCA(1024)
-        self.flow_cca = CCA(1024)
-
+        self.mca = MCA(1024)
         self.cas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
                                              nn.ReLU(), nn.Conv1d(1024, num_classes, kernel_size=1))
         self.cas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
@@ -43,11 +63,11 @@ class Model(nn.Module):
                                               nn.ReLU(), nn.Conv1d(1024, 1, kernel_size=1))
         self.apply(weights_init)
 
-    def forward(self, x, with_cca=True):
+    def forward(self, x, with_mca=True):
         # [N, D, T]
         rgb, flow = x[:, :, :1024].mT.contiguous(), x[:, :, 1024:].mT.contiguous()
-        if with_cca:
-            rgb, flow = self.rgb_cca(rgb, flow), self.flow_cca(flow, rgb)
+        if with_mca:
+            rgb, flow = self.mca(rgb, flow)
 
         # [N, T, C], class activation sequence
         cas_rgb, cas_flow = self.cas_rgb_encoder(rgb).mT.contiguous(), self.cas_flow_encoder(flow).mT.contiguous()
