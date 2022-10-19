@@ -40,8 +40,8 @@ class MCA(nn.Module):
         e_rgb = F.gelu(torch.matmul(rgb_atte, o_rgb))
         e_flow = F.gelu(torch.matmul(flow_atte, o_flow))
         # [N, T, D]
-        f_rgb = torch.tanh(e_rgb.mT.contiguous().reshape(n, t, -1) + rgb)
-        f_flow = torch.tanh(e_flow.mT.contiguous().reshape(n, t, -1) + flow)
+        f_rgb = torch.tanh(e_rgb.mT.reshape(n, t, -1).contiguous() + rgb)
+        f_flow = torch.tanh(e_flow.mT.reshape(n, t, -1).contiguous() + flow)
 
         f_rgb, f_flow = f_rgb.mT.contiguous(), f_flow.mT.contiguous()
         return f_rgb, f_flow
