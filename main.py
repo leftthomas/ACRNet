@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, cross_entropy, generalized_cross_entropy
+from model import Model, cross_entropy, generalized_cross_entropy, contrastive_mining
 from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred
 
 
@@ -124,10 +124,14 @@ if __name__ == '__main__':
         for step in train_bar:
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            action_score, background_score, aas_score, _, segment_mask = model(feat)
-            cas_loss = cross_entropy(action_score, background_score, label)
-            aas_loss = generalized_cross_entropy(aas_score, label, segment_mask)
-            loss = cas_loss + aas_loss
+            act_score, bkg_score, aas_score, seg_score, seg_mask = model(feat, False)
+            act_attend_score, bkg_attend_score, aas_attend_score, seg_attend_score, seg_attend_mask = model(feat)
+            cas_loss = cross_entropy(act_score, bkg_score, label)
+            aas_loss = generalized_cross_entropy(aas_score, label, seg_mask)
+            cas_attend_loss = cross_entropy(act_attend_score, bkg_attend_score, label)
+            aas_attend_loss = generalized_cross_entropy(aas_attend_score, label, seg_attend_mask)
+            contrastive_loss = contrastive_mining(seg_score, seg_attend_score, seg_mask, seg_attend_mask, label)
+            loss = cas_loss + aas_loss + cas_attend_loss + aas_attend_loss + 1.0 * contrastive_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

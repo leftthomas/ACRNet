@@ -145,4 +145,27 @@ def generalized_cross_entropy(aas_score, label, seg_mask, q=0.7, eps=1e-8):
     neg_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * (1.0 - mask)).sum(dim=-1) / neg_num).mean(dim=0)
     return pos_loss + neg_loss
 
-# def contrastive_mining():
+
+def contrastive_mining(seg_score, seg_attend_score, segment_mask, segment_attend_mask, label, q=0.7, eps=1e-8):
+    # [N]
+    neg_num = torch.clamp_min(torch.sum(1.0 - label, dim=-1), 1.0)
+    pos_num = torch.clamp_min(torch.sum(label, dim=-1), 1.0)
+    # [N, T, C]
+    real_neg_mask = (1.0 - segment_mask) * (1.0 - segment_attend_mask)
+    real_pos_mask = segment_mask * segment_attend_mask
+    fake_neg_mask = (1.0 - segment_mask) * segment_attend_mask
+    fake_pos_mask = segment_mask * (1.0 - segment_attend_mask)
+    # [N, C]
+    real_neg_num = torch.clamp_min(torch.sum(real_neg_mask, dim=1), 1.0)
+    real_pos_num = torch.clamp_min(torch.sum(real_pos_mask, dim=1), 1.0)
+    fake_neg_num = torch.clamp_min(torch.sum(fake_neg_mask, dim=1), 1.0)
+    fake_pos_num = torch.clamp_min(torch.sum(fake_pos_mask, dim=1), 1.0)
+    real_neg_loss = (((((((1.0 - (1.0 - seg_score + eps) ** q) / q) + ((1.0 - (1.0 - seg_attend_score + eps) ** q) / q))
+                        * real_neg_mask).sum(dim=1) / real_neg_num) * (1.0 - label)).sum(dim=-1) / neg_num).mean(dim=0)
+    real_pos_loss = (((((((1.0 - (seg_score + eps) ** q) / q) + ((1.0 - (seg_attend_score + eps) ** q) / q))
+                        * real_pos_mask).sum(dim=1) / real_pos_num) * label).sum(dim=-1) / pos_num).mean(dim=0)
+    fake_neg_loss = ((((((1.0 - (seg_score + eps) ** q) / q) + ((1.0 - (1.0 - seg_attend_score + eps) ** q) / q))
+                       * fake_neg_mask).sum(dim=1) / fake_neg_num).sum(dim=-1)).mean()
+    fake_pos_loss = ((((((1.0 - (1.0 - seg_score + eps) ** q) / q) + ((1.0 - (seg_attend_score + eps) ** q) / q))
+                       * fake_pos_mask).sum(dim=1) / fake_pos_num).sum(dim=-1)).mean()
+    return real_neg_loss + real_pos_loss + fake_neg_loss + fake_pos_loss
