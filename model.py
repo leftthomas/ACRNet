@@ -187,7 +187,7 @@ def calculate_score(seg_score, seg_mask, cas):
 def cross_entropy(act_score, bkg_score, label, eps=1e-8):
     act_num = torch.clamp_min(torch.sum(label, dim=-1), 1.0)
     act_loss = (-(label * torch.log(act_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
-    bkg_loss = (-torch.log(1.0 - bkg_score + eps)).mean(dim=-1).mean(dim=0)
+    bkg_loss = (-torch.log(1.0 - bkg_score + eps)).mean()
     return act_loss + bkg_loss
 
 
