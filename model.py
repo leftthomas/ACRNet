@@ -75,14 +75,18 @@ class Model(nn.Module):
         cas_score = torch.softmax(cas, dim=-1)
         # [N, T, 1], action activation sequence
         aas_rgb, aas_flow = self.aas_rgb_encoder(rgb).mT.contiguous(), self.aas_flow_encoder(flow).mT.contiguous()
-        aas = aas_rgb + aas_flow
-        aas_score = (torch.sigmoid(aas_rgb) + torch.sigmoid(aas_flow)) / 2
+        # aas = aas_rgb + aas_flow
+        # aas_score = torch.sigmoid(aas)
+        aas_rgb, aas_flow = torch.sigmoid(aas_rgb), torch.sigmoid(aas_flow)
         # [N, T, C]
-        seg_score = (cas_score + aas_score) / 2
+        seg_score = (cas_score + aas_rgb + aas_flow) / 3
         seg_mask = temporal_clustering(seg_score)
+
+        seg_mask, _ = mask_refining(seg_score, cas, seg_mask)
+
         # [N, C]
         act_score, bkg_score = calculate_score(seg_score, seg_mask, cas)
-        return act_score, bkg_score, aas_score, seg_score, seg_mask
+        return act_score, bkg_score, aas_rgb, aas_flow, seg_score, seg_mask
 
 
 def temporal_clustering(seg_score, r=4):
@@ -118,6 +122,41 @@ def temporal_clustering(seg_score, r=4):
     return mask
 
 
+def mask_refining(seg_score, cas, seg_mask):
+    n, t, c = seg_score.shape
+    sort_value, sort_index = torch.sort(seg_score, dim=1, descending=True, stable=True)
+    # [N, T]
+    ranks = torch.arange(2, t + 2, device=seg_score.device).reciprocal().view(1, -1).expand(n, -1).contiguous()
+    row_index = torch.arange(n, device=seg_score.device).view(-1, 1).expand(-1, t).contiguous()
+    # [N, C]
+    act_score = torch.zeros(n, c, device=seg_score.device)
+    mean_score = torch.zeros(n, c, device=seg_score.device)
+
+    for i in range(c):
+        # [N, T]
+        index, value = sort_index[:, :, i], sort_value[:, :, i]
+        mask = seg_mask[:, :, i][row_index, index]
+        cs = cas[:, :, i][row_index, index]
+        rank = ranks * mask
+        # [N]
+        tmp_score = (cs * rank).sum(dim=-1) / torch.clamp_min(rank.sum(dim=-1), 1.0)
+        act_score[:, i] = tmp_score
+        for j in range(n):
+            ref_score = tmp_score[j]
+            ref_val = cs[j][mask[j].bool()]
+            sort_val = value[j][mask[j].bool()]
+            if ref_val.shape[0] > 0:
+                cum_cnts = torch.arange(1, mask[j].sum() + 1, device=seg_score.device)
+                cum_scores = torch.cumsum(ref_val, dim=-1) / cum_cnts
+                tmp_mask = torch.ge(cum_scores, ref_score).long()
+                mean_score[j, i] = sort_val[min(tmp_mask.sum() - 1, sort_val.shape[0] - 1)]
+            else:
+                mean_score[j, i] = 0.0
+    max_mask = torch.ge(seg_score, mean_score.unsqueeze(dim=1)).float()
+    refined_mask = seg_mask * max_mask
+    return refined_mask, act_score
+
+
 def calculate_score(seg_score, seg_mask, cas, r=4):
     n, t, c = seg_score.shape
     # [N*C, T]
@@ -142,8 +181,8 @@ def calculate_score(seg_score, seg_mask, cas, r=4):
 def cross_entropy(act_score, bkg_score, label, eps=1e-8):
     act_num = torch.clamp_min(torch.sum(label, dim=-1), 1.0)
     act_loss = (-(label * torch.log(act_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
-    bkg_loss = (-(label * torch.log(1.0 - bkg_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
-    return (act_loss + bkg_loss) / 2
+    bkg_loss = (-torch.log(1.0 - bkg_score + eps)).mean(dim=-1).mean(dim=0)
+    return act_loss + bkg_loss
 
 
 # ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
@@ -163,7 +202,7 @@ def generalized_cross_entropy(aas_score, label, seg_mask, q=0.7, eps=1e-8):
 
     pos_loss = ((((1.0 - (aas_score + eps) ** q) / q) * mask).sum(dim=-1) / pos_num).mean(dim=0)
     neg_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * (1.0 - mask)).sum(dim=-1) / neg_num).mean(dim=0)
-    return (pos_loss + neg_loss) / 2
+    return pos_loss + neg_loss
 
 
 def contrastive_mining(seg_score, seg_attend_score, segment_mask, segment_attend_mask, label, q=0.7, eps=1e-8):
