@@ -21,7 +21,7 @@ def test_loop(net, data_loader, num_iter):
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
             data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
-            act_score, _, _, _, seg_score, _ = net(data)
+            act_score, _, _, seg_score, _ = net(data)
             # [C],  [T, C]
             act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
 
@@ -124,17 +124,16 @@ if __name__ == '__main__':
         for step in train_bar:
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            act_score, bkg_score, aas_rgb, aas_flow, seg_score, seg_mask = model(feat, True)
+            act_score, bkg_score, aas_score, seg_score, seg_mask = model(feat, True)
             # act_attend_score, bkg_attend_score, aas_attend_score, seg_attend_score, seg_attend_mask = model(feat)
             cas_loss = cross_entropy(act_score, bkg_score, label)
-            aas_rgb_loss = generalized_cross_entropy(aas_rgb, label, seg_mask)
-            aas_flow_loss = generalized_cross_entropy(aas_flow, label, seg_mask)
+            aas_loss = generalized_cross_entropy(aas_score, label, seg_mask)
             # cas_attend_loss = cross_entropy(act_attend_score, bkg_attend_score, label)
             # aas_attend_loss = generalized_cross_entropy(aas_attend_score, label, seg_attend_mask)
             # contrastive_loss = contrastive_mining(seg_score, seg_attend_score, seg_mask, seg_attend_mask, label)
             # loss = cas_loss + cas_attend_loss + args.lambda_1 * (
             #         aas_loss + aas_attend_loss) + args.lambda_2 * contrastive_loss
-            loss = cas_loss + args.lambda_1 * aas_rgb_loss + aas_flow_loss
+            loss = cas_loss + args.lambda_1 * aas_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

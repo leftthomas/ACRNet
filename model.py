@@ -75,21 +75,20 @@ class Model(nn.Module):
         cas_score = torch.softmax(cas, dim=-1)
         # [N, T, 1], action activation sequence
         aas_rgb, aas_flow = self.aas_rgb_encoder(rgb).mT.contiguous(), self.aas_flow_encoder(flow).mT.contiguous()
-        # aas = aas_rgb + aas_flow
-        # aas_score = torch.sigmoid(aas)
-        aas_rgb, aas_flow = torch.sigmoid(aas_rgb), torch.sigmoid(aas_flow)
+        aas = aas_rgb + aas_flow
+        aas_score = torch.sigmoid(aas)
         # [N, T, C]
-        seg_score = (cas_score + aas_rgb + aas_flow) / 3
+        seg_score = (cas_score + aas_score) / 2
         seg_mask = temporal_clustering(seg_score)
 
         seg_mask, _ = mask_refining(seg_score, cas, seg_mask)
 
         # [N, C]
         act_score, bkg_score = calculate_score(seg_score, seg_mask, cas)
-        return act_score, bkg_score, aas_rgb, aas_flow, seg_score, seg_mask
+        return act_score, bkg_score, aas_score, seg_score, seg_mask
 
 
-def temporal_clustering(seg_score, r=4):
+def temporal_clustering(seg_score, r=1):
     n, t, c = seg_score.shape
     # [N*C, T]
     seg_score = seg_score.mT.contiguous().view(-1, t)
@@ -122,11 +121,11 @@ def temporal_clustering(seg_score, r=4):
     return mask
 
 
-def mask_refining(seg_score, cas, seg_mask):
+def mask_refining(seg_score, cas, seg_mask, r=1):
     n, t, c = seg_score.shape
     sort_value, sort_index = torch.sort(seg_score, dim=1, descending=True, stable=True)
     # [N, T]
-    ranks = torch.arange(2, t + 2, device=seg_score.device).reciprocal().view(1, -1).expand(n, -1).contiguous()
+    ranks = (torch.arange(2, t + 2, device=seg_score.device).reciprocal() ** r).view(1, -1).expand(n, -1).contiguous()
     row_index = torch.arange(n, device=seg_score.device).view(-1, 1).expand(-1, t).contiguous()
     # [N, C]
     act_score = torch.zeros(n, c, device=seg_score.device)
@@ -157,7 +156,7 @@ def mask_refining(seg_score, cas, seg_mask):
     return refined_mask, act_score
 
 
-def calculate_score(seg_score, seg_mask, cas, r=4):
+def calculate_score(seg_score, seg_mask, cas, r=1):
     n, t, c = seg_score.shape
     # [N*C, T]
     seg_score = seg_score.mT.contiguous().view(-1, t)
@@ -168,7 +167,7 @@ def calculate_score(seg_score, seg_mask, cas, r=4):
     cas = cas.mT.contiguous().view(-1, t)
     sort_cas = cas[row_index, sort_index]
     # [1, T]
-    rank = torch.arange(1, t + 1, device=seg_score.device).unsqueeze(dim=0).reciprocal() ** r
+    rank = torch.arange(2, t + 2, device=seg_score.device).unsqueeze(dim=0).reciprocal() ** r
     # [N*C]
     act_num = (rank * sort_mask).sum(dim=-1)
     act_score = (sort_cas * rank * sort_mask).sum(dim=-1) / torch.clamp_min(act_num, 1.0)
