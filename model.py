@@ -80,15 +80,14 @@ class Model(nn.Module):
         # [N, T, C]
         seg_score = (cas_score + aas_score) / 2
         seg_mask = temporal_clustering(seg_score)
-
-        seg_mask, _ = mask_refining(seg_score, cas, seg_mask)
+        seg_mask = mask_refining(seg_score, seg_mask, cas)
 
         # [N, C]
         act_score, bkg_score = calculate_score(seg_score, seg_mask, cas)
         return act_score, bkg_score, aas_score, seg_score, seg_mask
 
 
-def temporal_clustering(seg_score, r=1):
+def temporal_clustering(seg_score):
     n, t, c = seg_score.shape
     # [N*C, T]
     seg_score = seg_score.mT.contiguous().view(-1, t)
@@ -110,8 +109,8 @@ def temporal_clustering(seg_score, r=1):
         pos_list = torch.where(condition, value, torch.zeros_like(value))
         neg_list = torch.where(~condition, value, torch.zeros_like(value))
         # update centers
-        pos_num = pos_num + condition.float() / ((i + 1) ** r)
-        pos_sum = pos_sum + pos_list / ((i + 1) ** r)
+        pos_num = pos_num + condition.float() / (i + 1)
+        pos_sum = pos_sum + pos_list / (i + 1)
         neg_num = neg_num + (~condition).float()
         neg_sum = neg_sum + neg_list
         # update mask
@@ -121,11 +120,11 @@ def temporal_clustering(seg_score, r=1):
     return mask
 
 
-def mask_refining(seg_score, cas, seg_mask, r=1):
+def mask_refining(seg_score, seg_mask, cas):
     n, t, c = seg_score.shape
     sort_value, sort_index = torch.sort(seg_score, dim=1, descending=True, stable=True)
     # [N, T]
-    ranks = (torch.arange(2, t + 2, device=seg_score.device).reciprocal() ** r).view(1, -1).expand(n, -1).contiguous()
+    ranks = torch.arange(2, t + 2, device=seg_score.device).reciprocal().view(1, -1).expand(n, -1).contiguous()
     row_index = torch.arange(n, device=seg_score.device).view(-1, 1).expand(-1, t).contiguous()
     # [N, C]
     act_score = torch.zeros(n, c, device=seg_score.device)
@@ -153,10 +152,10 @@ def mask_refining(seg_score, cas, seg_mask, r=1):
                 mean_score[j, i] = 0.0
     max_mask = torch.ge(seg_score, mean_score.unsqueeze(dim=1)).float()
     refined_mask = seg_mask * max_mask
-    return refined_mask, act_score
+    return refined_mask
 
 
-def calculate_score(seg_score, seg_mask, cas, r=1):
+def calculate_score(seg_score, seg_mask, cas):
     n, t, c = seg_score.shape
     # [N*C, T]
     seg_score = seg_score.mT.contiguous().view(-1, t)
@@ -167,7 +166,7 @@ def calculate_score(seg_score, seg_mask, cas, r=1):
     cas = cas.mT.contiguous().view(-1, t)
     sort_cas = cas[row_index, sort_index]
     # [1, T]
-    rank = torch.arange(2, t + 2, device=seg_score.device).unsqueeze(dim=0).reciprocal() ** r
+    rank = torch.arange(2, t + 2, device=seg_score.device).unsqueeze(dim=0).reciprocal()
     # [N*C]
     act_num = (rank * sort_mask).sum(dim=-1)
     act_score = (sort_cas * rank * sort_mask).sum(dim=-1) / torch.clamp_min(act_num, 1.0)
