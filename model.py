@@ -84,8 +84,7 @@ class Model(nn.Module):
         # [N, T, 1], action activation sequence
         aas_rgb = self.aas_rgb(self.aas_rgb_encoder(rgb)).mT.contiguous()
         aas_flow = self.aas_flow(self.aas_flow_encoder(flow)).mT.contiguous()
-        aas = aas_rgb + aas_flow
-        aas_score = torch.sigmoid(aas)
+        aas_score = (torch.sigmoid(aas_rgb) + torch.sigmoid(aas_flow)) / 2
         # [N, T, C]
         seg_score = (cas_score + aas_score) / 2
         seg_mask = temporal_clustering(seg_score)
