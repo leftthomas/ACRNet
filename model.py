@@ -53,14 +53,21 @@ class Model(nn.Module):
 
         self.mca = MCA(1024)
         self.cas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
-                                             nn.ReLU(), nn.Conv1d(1024, num_classes, kernel_size=1))
+                                             nn.ReLU())
         self.cas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
-                                              nn.ReLU(), nn.Conv1d(1024, num_classes, kernel_size=1))
+                                              nn.ReLU())
+
+        self.cas_rgb = nn.Conv1d(1024, num_classes, kernel_size=1)
+        self.cas_flow = nn.Conv1d(1024, num_classes, kernel_size=1)
 
         self.aas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
-                                             nn.ReLU(), nn.Conv1d(1024, 1, kernel_size=1))
+                                             nn.ReLU())
         self.aas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
-                                              nn.ReLU(), nn.Conv1d(1024, 1, kernel_size=1))
+                                              nn.ReLU())
+
+        self.aas_rgb = nn.Conv1d(1024, 1, kernel_size=1)
+        self.aas_flow = nn.Conv1d(1024, 1, kernel_size=1)
+
         self.apply(weights_init)
 
     def forward(self, x, with_mca=True):
@@ -70,11 +77,13 @@ class Model(nn.Module):
             rgb, flow = self.mca(rgb, flow)
 
         # [N, T, C], class activation sequence
-        cas_rgb, cas_flow = self.cas_rgb_encoder(rgb).mT.contiguous(), self.cas_flow_encoder(flow).mT.contiguous()
+        cas_rgb = self.cas_rgb(self.cas_rgb_encoder(rgb)).mT.contiguous()
+        cas_flow = self.cas_flow(self.cas_flow_encoder(flow)).mT.contiguous()
         cas = cas_rgb + cas_flow
         cas_score = torch.softmax(cas, dim=-1)
         # [N, T, 1], action activation sequence
-        aas_rgb, aas_flow = self.aas_rgb_encoder(rgb).mT.contiguous(), self.aas_flow_encoder(flow).mT.contiguous()
+        aas_rgb = self.aas_rgb(self.aas_rgb_encoder(rgb)).mT.contiguous()
+        aas_flow = self.aas_flow(self.aas_flow_encoder(flow)).mT.contiguous()
         aas = aas_rgb + aas_flow
         aas_score = torch.sigmoid(aas)
         # [N, T, C]
