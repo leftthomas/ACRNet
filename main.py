@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from mmaction.core.evaluation import ActivityNetLocalization
 from mmaction.localization import soft_nms
-from torch.optim import AdamW
+from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -116,7 +116,7 @@ if __name__ == '__main__':
         train_data = VideoDataset(args.data_path, args.data_name, 'train', args.num_seg,
                                   args.batch_size * args.num_iter)
         train_loader = iter(DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers))
-        optimizer = AdamW(model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
+        optimizer = Adam(model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
         lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter)
 
         total_loss, total_num, metric_info['Loss'] = 0.0, 0, []
