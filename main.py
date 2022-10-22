@@ -124,7 +124,7 @@ if __name__ == '__main__':
         for step in train_bar:
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            act_score, bkg_score, aas_score, seg_score, seg_mask = model(feat, True)
+            act_score, bkg_score, aas_score, seg_score, seg_mask = model(feat, False)
             # act_attend_score, bkg_attend_score, aas_attend_score, seg_attend_score, seg_attend_mask = model(feat)
             cas_loss = cross_entropy(act_score, bkg_score, label)
             aas_loss = generalized_cross_entropy(aas_score, label, seg_mask)

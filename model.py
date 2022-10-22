@@ -52,29 +52,34 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.mca = MCA(1024)
-        self.cas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
-                                             nn.ReLU())
-        self.cas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
-                                              nn.ReLU())
+        self.cas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, 3, padding=1), nn.Dropout(p=0.5), nn.ReLU())
+        self.cas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, 3, padding=1), nn.Dropout(p=0.5), nn.ReLU())
 
-        self.cas_rgb = nn.Conv1d(1024, num_classes, kernel_size=1)
-        self.cas_flow = nn.Conv1d(1024, num_classes, kernel_size=1)
+        self.cas_rgb = nn.Conv1d(1024, num_classes + 1, kernel_size=1)
+        self.cas_flow = nn.Conv1d(1024, num_classes + 1, kernel_size=1)
 
-        self.aas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
-                                             nn.ReLU())
-        self.aas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, kernel_size=3, padding=1), nn.Dropout(p=0.5),
-                                              nn.ReLU())
+        self.aas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, 3, padding=1), nn.Dropout(p=0.5), nn.ReLU())
+        self.aas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, 3, padding=1), nn.Dropout(p=0.5), nn.ReLU())
 
         self.aas_rgb = nn.Conv1d(1024, 1, kernel_size=1)
         self.aas_flow = nn.Conv1d(1024, 1, kernel_size=1)
 
+        self.rgb_attention = nn.Sequential(nn.Conv1d(1024, 512, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5),
+                                           nn.Conv1d(512, 512, 3, padding=1), nn.LeakyReLU(0.2), nn.Conv1d(512, 1, 1),
+                                           nn.Dropout(0.5), nn.Sigmoid())
+        self.flow_attention = nn.Sequential(nn.Conv1d(1024, 512, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5),
+                                            nn.Conv1d(512, 512, 3, padding=1), nn.LeakyReLU(0.2), nn.Conv1d(512, 1, 1),
+                                            nn.Dropout(0.5), nn.Sigmoid())
+
         self.apply(weights_init)
 
-    def forward(self, x, with_mca=True):
+    def forward(self, x, with_atte=True):
         # [N, D, T]
         rgb, flow = x[:, :, :1024].mT.contiguous(), x[:, :, 1024:].mT.contiguous()
-        if with_mca:
-            rgb, flow = self.mca(rgb, flow)
+        rgb, flow = self.mca(rgb, flow)
+
+        if with_atte:
+            rgb, flow = self.rgb_attention(rgb) * rgb, self.flow_attention(flow) * flow
 
         # [N, T, C], class activation sequence
         cas_rgb = self.cas_rgb(self.cas_rgb_encoder(rgb)).mT.contiguous()
