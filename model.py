@@ -64,22 +64,24 @@ class Model(nn.Module):
         self.aas_rgb = nn.Conv1d(1024, 1, kernel_size=1)
         self.aas_flow = nn.Conv1d(1024, 1, kernel_size=1)
 
-        self.rgb_attention = nn.Sequential(nn.Conv1d(1024, 512, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5),
-                                           nn.Conv1d(512, 512, 3, padding=1), nn.LeakyReLU(0.2), nn.Conv1d(512, 1, 1),
-                                           nn.Dropout(0.5), nn.Sigmoid())
-        self.flow_attention = nn.Sequential(nn.Conv1d(1024, 512, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5),
-                                            nn.Conv1d(512, 512, 3, padding=1), nn.LeakyReLU(0.2), nn.Conv1d(512, 1, 1),
-                                            nn.Dropout(0.5), nn.Sigmoid())
+        self.attention = nn.Sequential(nn.Conv1d(2048, 512, 1), nn.ReLU(), nn.Conv1d(512, 1, 1), nn.Sigmoid())
 
         self.apply(weights_init)
 
     def forward(self, x, with_atte=True):
         # [N, D, T]
-        rgb, flow = x[:, :, :1024].mT.contiguous(), x[:, :, 1024:].mT.contiguous()
-        rgb, flow = self.mca(rgb, flow)
+        x = x.mT.contiguous()
+
+        rgb, flow = self.mca(x[:, :1024, :], x[:, 1024:, :])
 
         if with_atte:
-            rgb, flow = self.rgb_attention(rgb) * rgb, self.flow_attention(flow) * flow
+            atte = self.attention(torch.cat((rgb, flow), dim=1))
+            x = atte * torch.cat((rgb, flow), dim=1)
+            # [N, T, 1]
+            atte = atte.mT.contiguous()
+            rgb, flow = x[:, :1024, :], x[:, 1024:, :]
+        else:
+            atte = None
 
         # [N, T, C], class activation sequence
         cas_rgb = self.cas_rgb(self.cas_rgb_encoder(rgb)).mT.contiguous()
@@ -97,7 +99,7 @@ class Model(nn.Module):
 
         # [N, C]
         act_score, bkg_score = calculate_score(seg_score, seg_mask, cas)
-        return act_score, bkg_score, aas_score, seg_score, seg_mask
+        return act_score, bkg_score, aas_score, seg_score, seg_mask, atte
 
 
 def temporal_clustering(seg_score):
@@ -216,32 +218,23 @@ def generalized_cross_entropy(aas_score, label, seg_mask, q=0.7, eps=1e-8):
     return pos_loss + neg_loss
 
 
-def contrastive_mining(seg_score, seg_attend_score, segment_mask, segment_attend_mask, label, q=0.7, eps=1e-8):
-    # [N, T, C]
-    real_neg_mask = (1.0 - segment_mask) * (1.0 - segment_attend_mask) + segment_mask * segment_attend_mask * (
-            1.0 - label.unsqueeze(dim=1))
-    real_pos_mask = segment_mask * segment_attend_mask * label.unsqueeze(dim=1)
-    fake_neg_mask = (1.0 - segment_mask) * segment_attend_mask * (1.0 - label).unsqueeze(dim=1)
-    fake_neg_attend_mask = (1.0 - segment_mask) * segment_attend_mask * label.unsqueeze(dim=1)
-    fake_pos_mask = segment_mask * (1.0 - segment_attend_mask) * label.unsqueeze(dim=1)
-    fake_pos_attend_mask = segment_mask * (1.0 - segment_attend_mask) * (1.0 - label).unsqueeze(dim=1)
-    # [N, C]
-    real_neg_num = torch.clamp_min(torch.sum(real_neg_mask), 1.0)
-    real_pos_num = torch.clamp_min(torch.sum(real_pos_mask), 1.0)
-    fake_neg_num = torch.clamp_min(torch.sum(fake_neg_mask), 1.0)
-    fake_neg_attend_num = torch.clamp_min(torch.sum(fake_neg_attend_mask), 1.0)
-    fake_pos_num = torch.clamp_min(torch.sum(fake_pos_mask), 1.0)
-    fake_pos_attend_num = torch.clamp_min(torch.sum(fake_pos_attend_mask), 1.0)
+def contrastive_mining(ac_score, mix_score, ac_mask, mix_mask, label, q=0.7, eps=1e-8):
+    real_pos = ac_mask * mix_mask * label.unsqueeze(dim=1)
+    real_neg = (1 - ac_mask) * (1 - mix_mask) + ac_mask * mix_mask * (1 - label).unsqueeze(dim=1)
+    false_pos = (1 - ac_mask) * mix_mask
+    false_neg = ac_mask * (1 - mix_mask)
 
-    real_neg_loss = ((((1.0 - (1.0 - seg_score + eps) ** q) / q) + (
-            (1.0 - (1.0 - seg_attend_score + eps) ** q) / q)) * real_neg_mask).sum() / real_neg_num
-    real_pos_loss = ((((1.0 - (seg_score + eps) ** q) / q) + (
-            (1.0 - (seg_attend_score + eps) ** q) / q)) * real_pos_mask).sum() / real_pos_num
-    fake_neg_loss = (torch.abs(
-        seg_score - seg_attend_score.detach()) * fake_neg_attend_mask).sum() / fake_neg_attend_num + (
-                            torch.abs(seg_attend_score - seg_score.detach()) * fake_neg_mask).sum() / fake_neg_num
-    fake_pos_loss = ((((1.0 - (1.0 - seg_attend_score + eps) ** q) / q) + (
-            (1.0 - (seg_score + eps) ** q) / q)) * fake_pos_mask).sum() / fake_pos_num + ((((1.0 - (
-            1.0 - seg_attend_score + eps) ** q) / q) + ((1.0 - (
-            1.0 - seg_score + eps) ** q) / q)) * fake_pos_attend_mask).sum() / fake_pos_attend_num
-    return (real_neg_loss + real_pos_loss + fake_neg_loss + fake_pos_loss) / 4
+    loss_rp = ((1 - ac_score ** q + eps) * real_pos / q + (1 - mix_score ** q) * real_pos / q) / 2.0
+    loss_rp = loss_rp.sum() / (real_pos.sum() + eps)
+
+    loss_fp = (((1 - (mix_score + eps) ** q) * false_pos) / q + ((1 - (1 - ac_score + eps) ** q) * false_pos) / q) / 2.0
+    loss_fp = loss_fp.sum() / (false_pos.sum() + eps)
+
+    loss_rn = (((1 - (1 - mix_score + eps) ** q) * real_neg) / q + (
+            (1 - (1 - ac_score + eps) ** q) * real_neg) / q) / 2.0
+    loss_rn = loss_rn.sum() / (real_neg.sum() + eps)
+
+    loss_fn = torch.abs(ac_score.detach() - mix_score) * false_neg
+    loss_fn = loss_fn.sum() / (false_neg.sum() + eps)
+
+    return loss_rp + loss_rn + loss_fp + loss_fn
