@@ -64,42 +64,35 @@ class Model(nn.Module):
         self.aas_rgb = nn.Conv1d(1024, 1, kernel_size=1)
         self.aas_flow = nn.Conv1d(1024, 1, kernel_size=1)
 
-        self.attention = nn.Sequential(nn.Conv1d(2048, 512, 1), nn.ReLU(), nn.Conv1d(512, 1, 1), nn.Sigmoid())
-
         self.apply(weights_init)
 
     def forward(self, x, with_atte=True):
         # [N, D, T]
         x = x.mT.contiguous()
-
         rgb, flow = self.mca(x[:, :1024, :], x[:, 1024:, :])
-
-        if with_atte:
-            atte = self.attention(torch.cat((rgb, flow), dim=1))
-            x = atte * torch.cat((rgb, flow), dim=1)
-            # [N, T, 1]
-            atte = atte.mT.contiguous()
-            rgb, flow = x[:, :1024, :], x[:, 1024:, :]
-        else:
-            atte = None
 
         # [N, T, C], class activation sequence
         cas_rgb = self.cas_rgb(self.cas_rgb_encoder(rgb)).mT.contiguous()
         cas_flow = self.cas_flow(self.cas_flow_encoder(flow)).mT.contiguous()
         cas = cas_rgb + cas_flow
         cas_score = torch.softmax(cas, dim=-1)
-        # [N, T, 1], action activation sequence
-        aas_rgb = self.aas_rgb(self.aas_rgb_encoder(rgb)).mT.contiguous()
-        aas_flow = self.aas_flow(self.aas_flow_encoder(flow)).mT.contiguous()
-        aas_score = (torch.sigmoid(aas_rgb) + torch.sigmoid(aas_flow)) / 2
-        # [N, T, C]
-        seg_score = (cas_score + aas_score) / 2
+        if with_atte:
+            # [N, T, 1], action activation sequence
+            aas_rgb = torch.sigmoid(self.aas_rgb(self.aas_rgb_encoder(rgb)).mT.contiguous())
+            aas_flow = torch.sigmoid(self.aas_flow(self.aas_flow_encoder(flow)).mT.contiguous())
+            aas_score = (aas_rgb + aas_flow) / 2
+            # [N, T, C]
+            seg_score = (cas_score + aas_score) / 2
+        else:
+            aas_rgb, aas_flow = None, None
+            seg_score = cas_score
+
         seg_mask = temporal_clustering(seg_score)
         seg_mask = mask_refining(seg_score, seg_mask, cas)
 
         # [N, C]
         act_score, bkg_score = calculate_score(seg_score, seg_mask, cas)
-        return act_score, bkg_score, aas_score, seg_score, seg_mask, atte
+        return act_score, bkg_score, seg_score, seg_mask, aas_rgb, aas_flow
 
 
 def temporal_clustering(seg_score):
