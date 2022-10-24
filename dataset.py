@@ -31,6 +31,10 @@ class VideoDataset(Dataset):
         self.rgb, self.flow, self.annotations, classes, self.class_to_idx, self.idx_to_class = [], [], {}, set(), {}, {}
         for key, value in annotations.items():
             if value['subset'] == data_type:
+                # ref: Weakly-supervised Temporal Action Localization by Uncertainty Modeling (AAAI 2021)
+                if data_name == 'thumos14' and key in ['video_test_0000270', 'video_test_0001292',
+                                                       'video_test_0001496']:
+                    continue
                 self.rgb.append('{}/{}/features/{}/{}_rgb.npy'.format(data_path, data_name, data_type, key))
                 self.flow.append('{}/{}/features/{}/{}_flow.npy'.format(data_path, data_name, data_type, key))
                 # the prefix is added to compatible with ActivityNetLocalization class
