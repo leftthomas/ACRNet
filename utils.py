@@ -107,6 +107,22 @@ def which_ffmpeg():
     return result.stdout.decode('utf-8').replace('\n', '')
 
 
+# ref: Dual-Evidential Learning for Weakly-supervised Temporal Action Localization (ECCV 2022)
+def filter_results(results, ambi_file):
+    ambi_list = [line.strip('\n').split(' ') for line in list(open(ambi_file, 'r'))]
+    for key, value in results['results'].items():
+        for filter_item in ambi_list:
+            if filter_item[0] == key:
+                filtered = []
+                for item in value:
+                    if float(filter_item[2]) <= item['segment'][0] <= float(filter_item[3]):
+                        continue
+                    else:
+                        filtered.append(item)
+                results['results'][key] = filtered
+    return results
+
+
 # ref: Completeness Modeling and Context Separation for Weakly Supervised Temporal Action Localization (CVPR 2019)
 def oic_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
     inner_score = np.mean(frame_scores[proposal])

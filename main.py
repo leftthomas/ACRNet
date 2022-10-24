@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from dataset import VideoDataset
 from model import Model, cross_entropy, generalized_cross_entropy
-from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred
+from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred, filter_results
 
 
 def test_loop(net, data_loader, num_iter):
@@ -61,6 +61,8 @@ def test_loop(net, data_loader, num_iter):
 
         test_acc = num_correct / num_total
 
+        if args.data_name == 'thumos14':
+            results = filter_results(results, 'result/ambiguous.txt')
         gt_path = '{}/{}_gt.json'.format(args.save_path, args.data_name)
         with open(gt_path, 'w') as json_file:
             json.dump(data_loader.dataset.annotations, json_file, indent=4)
