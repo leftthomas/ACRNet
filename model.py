@@ -52,9 +52,9 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.mca = MCA(1024)
-        self.cas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, 3, padding=1), nn.Dropout(p=0.5), nn.ReLU(),
+        self.cas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 1024, 3, padding=1), nn.ReLU(),
                                              nn.Conv1d(1024, num_classes, kernel_size=1))
-        self.cas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, 3, padding=1), nn.Dropout(p=0.5), nn.ReLU(),
+        self.cas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 1024, 3, padding=1), nn.ReLU(),
                                               nn.Conv1d(1024, num_classes, kernel_size=1))
 
         self.aas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 512, 1), nn.ReLU(), nn.Conv1d(512, 1, 1))
