@@ -207,23 +207,28 @@ def generalized_cross_entropy(aas_score, label, seg_mask, q=0.7, eps=1e-8):
     return pos_loss + neg_loss
 
 
-def contrastive_mining(ac_score, mix_score, ac_mask, mix_mask, label, q=0.7, eps=1e-8):
-    real_pos = ac_mask * mix_mask * label.unsqueeze(dim=1)
-    real_neg = (1 - ac_mask) * (1 - mix_mask) + ac_mask * mix_mask * (1 - label).unsqueeze(dim=1)
-    false_pos = (1 - ac_mask) * mix_mask
-    false_neg = ac_mask * (1 - mix_mask)
+def contrastive_mining(seg_score, seg_attend_score, seg_mask, seg_attend_mask, label, q=0.7, eps=1e-8):
+    # [N, 1]
+    act_num = torch.clamp_min(torch.sum(label, dim=-1), 1.0)
+    bck_num = torch.clamp_min(torch.sum(1.0 - label, dim=-1), 1.0)
+    # [N, T, C]
+    rp_mask = seg_mask * seg_attend_mask
+    rn_mask = (1.0 - seg_mask) * (1.0 - seg_attend_mask)
+    fp_mask = seg_mask * (1.0 - seg_attend_mask)
+    fn_mask = (1.0 - seg_mask) * seg_attend_mask
+    # [N, C]
+    rp_num = torch.clamp_min(torch.sum(rp_mask, dim=1), 1.0)
+    rn_num = torch.clamp_min(torch.sum(rn_mask, dim=1), 1.0)
+    fp_num = torch.clamp_min(torch.sum(fp_mask, dim=1), 1.0)
+    fn_num = torch.clamp_min(torch.sum(fn_mask, dim=1), 1.0)
+    # [N, T, C]
+    rp_score = ((1.0 - (seg_score + eps) ** q) / q + (1.0 - (seg_attend_score + eps) ** q) / q) / 2
+    rn_score = ((1.0 - (1.0 - seg_score + eps) ** q) / q + (1.0 - (1.0 - seg_attend_score + eps) ** q) / q) / 2
+    fp_score = ((1.0 - (seg_score + eps) ** q) / q + (1.0 - (1.0 - seg_attend_score + eps) ** q) / q) / 2
+    fn_score = ((1.0 - (1.0 - seg_score + eps) ** q) / q + (1.0 - (seg_attend_score + eps) ** q) / q) / 2
 
-    loss_rp = ((1 - ac_score ** q + eps) * real_pos / q + (1 - mix_score ** q) * real_pos / q) / 2.0
-    loss_rp = loss_rp.sum() / (real_pos.sum() + eps)
-
-    loss_fp = (((1 - (mix_score + eps) ** q) * false_pos) / q + ((1 - (1 - ac_score + eps) ** q) * false_pos) / q) / 2.0
-    loss_fp = loss_fp.sum() / (false_pos.sum() + eps)
-
-    loss_rn = (((1 - (1 - mix_score + eps) ** q) * real_neg) / q + (
-            (1 - (1 - ac_score + eps) ** q) * real_neg) / q) / 2.0
-    loss_rn = loss_rn.sum() / (real_neg.sum() + eps)
-
-    loss_fn = torch.abs(ac_score.detach() - mix_score) * false_neg
-    loss_fn = loss_fn.sum() / (false_neg.sum() + eps)
-
-    return loss_rp + loss_rn + loss_fp + loss_fn
+    rp_loss = (((rp_score * rp_mask * label.unsqueeze(dim=1)).sum(dim=1) / rp_num).sum(dim=-1) / act_num).mean(dim=0)
+    rn_loss = (((rn_score * rn_mask * label.unsqueeze(dim=1)).sum(dim=1) / rn_num).sum(dim=-1) / act_num).mean(dim=0)
+    fp_loss = (((fp_score * fp_mask * label.unsqueeze(dim=1)).sum(dim=1) / fp_num).sum(dim=-1) / act_num).mean(dim=0)
+    fn_loss = (((fn_score * fn_mask * label.unsqueeze(dim=1)).sum(dim=1) / fn_num).sum(dim=-1) / act_num).mean(dim=0)
+    return rp_loss + rn_loss + fp_loss + fn_loss
