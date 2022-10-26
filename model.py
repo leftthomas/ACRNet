@@ -208,6 +208,9 @@ def generalized_cross_entropy(aas_score, label, seg_mask, q=0.7, eps=1e-8):
 
 
 def contrastive_mining(seg_score, seg_attend_score, seg_mask, seg_attend_mask, label, q=0.7, eps=1e-8):
+    seg_score = seg_score.detach()
+    seg_mask = seg_mask.detach()
+
     # [N, 1]
     act_num = torch.clamp_min(torch.sum(label, dim=-1), 1.0)
     bck_num = torch.clamp_min(torch.sum(1.0 - label, dim=-1), 1.0)
@@ -224,11 +227,13 @@ def contrastive_mining(seg_score, seg_attend_score, seg_mask, seg_attend_mask, l
     # [N, T, C]
     rp_score = ((1.0 - (seg_score + eps) ** q) / q + (1.0 - (seg_attend_score + eps) ** q) / q) / 2
     rn_score = ((1.0 - (1.0 - seg_score + eps) ** q) / q + (1.0 - (1.0 - seg_attend_score + eps) ** q) / q) / 2
-    fp_score = ((1.0 - (seg_score + eps) ** q) / q + (1.0 - (1.0 - seg_attend_score + eps) ** q) / q) / 2
-    fn_score = ((1.0 - (1.0 - seg_score + eps) ** q) / q + (1.0 - (seg_attend_score + eps) ** q) / q) / 2
+    # fp_score = ((1.0 - (seg_score + eps) ** q) / q + (1.0 - (1.0 - seg_attend_score + eps) ** q) / q) / 2
+    # fn_score = ((1.0 - (1.0 - seg_score + eps) ** q) / q + (1.0 - (seg_attend_score + eps) ** q) / q) / 2
+    fp_score = (1.0 - (1.0 - seg_attend_score + eps) ** q) / q
+    fn_score = (1.0 - (seg_attend_score + eps) ** q) / q
 
-    rp_loss = (((rp_score * rp_mask * label.unsqueeze(dim=1)).sum(dim=1) / rp_num).sum(dim=-1) / act_num).mean(dim=0)
-    rn_loss = (((rn_score * rn_mask * label.unsqueeze(dim=1)).sum(dim=1) / rn_num).sum(dim=-1) / act_num).mean(dim=0)
+    # rp_loss = (((rp_score * rp_mask * label.unsqueeze(dim=1)).sum(dim=1) / rp_num).sum(dim=-1) / act_num).mean(dim=0)
+    # rn_loss = (((rn_score * rn_mask * label.unsqueeze(dim=1)).sum(dim=1) / rn_num).sum(dim=-1) / act_num).mean(dim=0)
     fp_loss = (((fp_score * fp_mask * label.unsqueeze(dim=1)).sum(dim=1) / fp_num).sum(dim=-1) / act_num).mean(dim=0)
     fn_loss = (((fn_score * fn_mask * label.unsqueeze(dim=1)).sum(dim=1) / fn_num).sum(dim=-1) / act_num).mean(dim=0)
-    return rp_loss + rn_loss + fp_loss + fn_loss
+    return fp_loss + fn_loss
