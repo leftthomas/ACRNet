@@ -188,52 +188,45 @@ def cross_entropy(act_score, bkg_score, label, eps=1e-8):
 
 
 # ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
-def generalized_cross_entropy(aas_score, label, seg_mask, q=0.7, eps=1e-8):
-    # [N, T]
-    aas_score = aas_score.squeeze(dim=-1)
+def generalized_cross_entropy(aas_score, seg_mask, seg_attend_mask, label, q=0.7, eps=1e-8):
     n, t, c = seg_mask.shape
     # [N, T]
-    mask = torch.zeros(n, t, device=seg_mask.device)
-    for i in range(n):
-        mask[i, :] = torch.sum(seg_mask[i, :, label[i, :].bool()], dim=-1)
+    aas_score = aas_score.squeeze(dim=-1)
+
     # [N, T]
-    mask = torch.clamp_max(mask, 1.0)
-    # [N, 1]
-    pos_num = torch.clamp_min(torch.sum(mask, dim=1), 1.0)
-    neg_num = torch.clamp_min(torch.sum(1.0 - mask, dim=1), 1.0)
+    rp_mask = torch.zeros(n, t, device=seg_mask.device)
+    for i in range(n):
+        rp_mask[i, :] = torch.sum((seg_mask * seg_attend_mask)[i, :, label[i, :].bool()], dim=-1)
+    rp_mask = torch.clamp_max(rp_mask, 1.0)
 
-    pos_loss = ((((1.0 - (aas_score + eps) ** q) / q) * mask).sum(dim=-1) / pos_num).mean(dim=0)
-    neg_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * (1.0 - mask)).sum(dim=-1) / neg_num).mean(dim=0)
-    return pos_loss + neg_loss
+    rn_mask = torch.zeros(n, t, device=seg_mask.device)
+    for i in range(n):
+        rn_mask[i, :] = torch.sum(((1.0 - seg_mask) * (1.0 - seg_attend_mask))[i, :, label[i, :].bool()], dim=-1)
+    rn_mask = torch.clamp_max(rn_mask, 1.0)
+
+    # [N]
+    rp_num = torch.clamp_min(torch.sum(rp_mask, dim=1), 1.0)
+    rn_num = torch.clamp_min(torch.sum(rn_mask, dim=1), 1.0)
+
+    rp_loss = ((((1.0 - (aas_score + eps) ** q) / q) * rp_mask).sum(dim=-1) / rp_num).mean(dim=0)
+    rn_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * rn_mask).sum(dim=-1) / rn_num).mean(dim=0)
+
+    return rp_loss + rn_loss
 
 
-def contrastive_mining(seg_score, seg_attend_score, seg_mask, seg_attend_mask, label, q=0.7, eps=1e-8):
-    seg_score = seg_score.detach()
-    seg_mask = seg_mask.detach()
-
+def contrastive_mining(seg_score, seg_mask, seg_attend_mask, label, q=0.7, eps=1e-8):
     # [N, 1]
     act_num = torch.clamp_min(torch.sum(label, dim=-1), 1.0)
-    bck_num = torch.clamp_min(torch.sum(1.0 - label, dim=-1), 1.0)
     # [N, T, C]
-    rp_mask = seg_mask * seg_attend_mask
-    rn_mask = (1.0 - seg_mask) * (1.0 - seg_attend_mask)
     fp_mask = seg_mask * (1.0 - seg_attend_mask)
     fn_mask = (1.0 - seg_mask) * seg_attend_mask
     # [N, C]
-    rp_num = torch.clamp_min(torch.sum(rp_mask, dim=1), 1.0)
-    rn_num = torch.clamp_min(torch.sum(rn_mask, dim=1), 1.0)
     fp_num = torch.clamp_min(torch.sum(fp_mask, dim=1), 1.0)
     fn_num = torch.clamp_min(torch.sum(fn_mask, dim=1), 1.0)
     # [N, T, C]
-    rp_score = ((1.0 - (seg_score + eps) ** q) / q + (1.0 - (seg_attend_score + eps) ** q) / q) / 2
-    rn_score = ((1.0 - (1.0 - seg_score + eps) ** q) / q + (1.0 - (1.0 - seg_attend_score + eps) ** q) / q) / 2
-    # fp_score = ((1.0 - (seg_score + eps) ** q) / q + (1.0 - (1.0 - seg_attend_score + eps) ** q) / q) / 2
-    # fn_score = ((1.0 - (1.0 - seg_score + eps) ** q) / q + (1.0 - (seg_attend_score + eps) ** q) / q) / 2
-    fp_score = (1.0 - (1.0 - seg_attend_score + eps) ** q) / q
-    fn_score = (1.0 - (seg_attend_score + eps) ** q) / q
+    fp_score = (1.0 - (1.0 - seg_score + eps) ** q) / q
+    fn_score = (1.0 - (seg_score + eps) ** q) / q
 
-    # rp_loss = (((rp_score * rp_mask * label.unsqueeze(dim=1)).sum(dim=1) / rp_num).sum(dim=-1) / act_num).mean(dim=0)
-    # rn_loss = (((rn_score * rn_mask * label.unsqueeze(dim=1)).sum(dim=1) / rn_num).sum(dim=-1) / act_num).mean(dim=0)
     fp_loss = (((fp_score * fp_mask * label.unsqueeze(dim=1)).sum(dim=1) / fp_num).sum(dim=-1) / act_num).mean(dim=0)
     fn_loss = (((fn_score * fn_mask * label.unsqueeze(dim=1)).sum(dim=1) / fn_num).sum(dim=-1) / act_num).mean(dim=0)
     return fp_loss + fn_loss

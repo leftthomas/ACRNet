@@ -128,12 +128,13 @@ if __name__ == '__main__':
             feat, label = feat.cuda(), label.cuda()
             act_score, bkg_score, seg_score, seg_mask, _, _ = model(feat, False)
             act_attend_score, bkg_attend_score, seg_attend_score, seg_attend_mask, aas_rgb, aas_flow = model(feat)
-            # cas_loss = cross_entropy(act_score, bkg_score, label)
+            cas_loss = cross_entropy(act_score, bkg_score, label)
             cas_attend_loss = cross_entropy(act_attend_score, bkg_attend_score, label)
-            aas_rgb_loss = generalized_cross_entropy(aas_rgb, label, seg_attend_mask)
-            aas_flow_loss = generalized_cross_entropy(aas_flow, label, seg_attend_mask)
-            contrastive_loss = contrastive_mining(seg_score, seg_attend_score, seg_mask, seg_attend_mask, label)
-            loss = cas_attend_loss + args.lambda_1 * (aas_rgb_loss + aas_flow_loss) + args.lambda_2 * contrastive_loss
+            aas_rgb_loss = generalized_cross_entropy(aas_rgb, seg_mask, seg_attend_mask, label)
+            aas_flow_loss = generalized_cross_entropy(aas_flow, seg_mask, seg_attend_mask, label)
+            contrastive_loss = contrastive_mining(seg_score, seg_mask, seg_attend_mask, label)
+            loss = cas_loss + cas_attend_loss + args.lambda_1 * (
+                        aas_rgb_loss + aas_flow_loss) + args.lambda_2 * contrastive_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
