@@ -232,29 +232,4 @@ def contrastive_mining(seg_score, seg_mask, seg_attend_mask, label, q=0.7, eps=1
     return fp_loss + fn_loss
 
 
-if __name__ == '__main__':
-    import glob
-    import numpy as np
-    import os
-    import json
 
-    saved_dict = {}
-    with open('/home/rh/Downloads/thumos14/annotations.json', 'r') as f:
-        annotations = json.load(f)['database']
-
-    for data_type in ['val', 'test']:
-        for video_file in sorted(glob.glob('/home/rh/Downloads/thumos14/split_{}.txt'.format(data_type))):
-            with open(video_file, 'r') as f:
-                for video_name in f.readlines():
-                    video_name = video_name.strip('\n')
-                    saved_dict[video_name] = {'subset': data_type,
-                                              'annotations': annotations[video_name]['annotations']}
-    with open('/home/rh/Downloads/thumos14/gt.json', 'w') as f:
-        json.dump(saved_dict, f, indent=4)
-    feats = glob.glob('/home/rh/Downloads/thumos14/features/*/*.npy')
-    for feat_name in feats:
-        feat = np.load(feat_name)
-        rgb, flow = feat[:, :1024], feat[:, 1024:]
-        name = feat_name.split('/')[-1].split('.')[0]
-        np.save('{}/{}_rgb.npy'.format(os.path.dirname(feat_name), name), rgb)
-        np.save('{}/{}_flow.npy'.format(os.path.dirname(feat_name), name), flow)
