@@ -188,30 +188,25 @@ def cross_entropy(act_score, bkg_score, label, eps=1e-8):
 
 
 # ref: Weakly Supervised Action Selection Learning in Video (CVPR 2021)
-def generalized_cross_entropy(aas_score, seg_mask, seg_attend_mask, label, q=0.7, eps=1e-8):
-    n, t, c = seg_mask.shape
+def generalized_cross_entropy(aas_score, seg_mask, label, q=0.7, eps=1e-8):
     # [N, T]
     aas_score = aas_score.squeeze(dim=-1)
-
+    n, t, c = seg_mask.shape
     # [N, T]
-    rp_mask = torch.zeros(n, t, device=seg_mask.device)
+    mask = torch.zeros(n, t, device=seg_mask.device)
     for i in range(n):
-        rp_mask[i, :] = torch.sum((seg_mask * seg_attend_mask)[i, :, label[i, :].bool()], dim=-1)
-    rp_mask = torch.clamp_max(rp_mask, 1.0)
-
-    rn_mask = torch.zeros(n, t, device=seg_mask.device)
-    for i in range(n):
-        rn_mask[i, :] = torch.sum(((1.0 - seg_mask) * (1.0 - seg_attend_mask))[i, :, label[i, :].bool()], dim=-1)
-    rn_mask = torch.clamp_max(rn_mask, 1.0)
-
+        mask[i, :] = torch.sum(seg_mask[i, :, label[i, :].bool()], dim=-1)
+    # [N, T]
+    mask = torch.clamp_max(mask, 1.0)
     # [N]
-    rp_num = torch.clamp_min(torch.sum(rp_mask, dim=1), 1.0)
-    rn_num = torch.clamp_min(torch.sum(rn_mask, dim=1), 1.0)
+    pos_num = torch.sum(mask, dim=1)
+    pos_num = torch.where(torch.eq(pos_num, 0.0), torch.ones_like(pos_num), pos_num)
+    neg_num = torch.sum(1.0 - mask, dim=1)
+    neg_num = torch.where(torch.eq(neg_num, 0.0), torch.ones_like(neg_num), neg_num)
 
-    rp_loss = ((((1.0 - (aas_score + eps) ** q) / q) * rp_mask).sum(dim=-1) / rp_num).mean(dim=0)
-    rn_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * rn_mask).sum(dim=-1) / rn_num).mean(dim=0)
-
-    return rp_loss + rn_loss
+    pos_loss = ((((1.0 - (aas_score + eps) ** q) / q) * mask).sum(dim=-1) / pos_num).mean(dim=0)
+    neg_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * (1.0 - mask)).sum(dim=-1) / neg_num).mean(dim=0)
+    return pos_loss + neg_loss
 
 
 def contrastive_mining(seg_score, seg_mask, seg_attend_mask, label, q=0.7, eps=1e-8):

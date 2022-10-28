@@ -138,7 +138,10 @@ def oic_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
     return score
 
 
-def draw_pred(frame_scores, proposal_dict, gt_dicts, idx_to_class, class_to_idx, video_name, fps, save_path, data_name):
+def draw_pred(frame_scores, proposal_dict, dataset, video_name, fps, save_path):
+    gt_dicts, idx_to_class, class_to_idx = dataset.annotations, dataset.idx_to_class, dataset.class_to_idx
+    data_name = dataset.data_name
+
     frame_indexes = np.arange(0, frame_scores.shape[0])
     color_palette = sns.color_palette('deep', n_colors=len(idx_to_class))
 

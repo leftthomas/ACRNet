@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import VideoDataset
-from model import Model, cross_entropy, generalized_cross_entropy, contrastive_mining
+from model import Model, cross_entropy, generalized_cross_entropy
 from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred, filter_results
 
 
@@ -55,8 +55,7 @@ def test_loop(net, data_loader, num_iter):
                                                     high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
             if args.save_vis:
                 # draw the pred to vis
-                draw_pred(frame_score, proposal_dict, data_loader.dataset.annotations, data_loader.dataset.idx_to_class,
-                          data_loader.dataset.class_to_idx, video_name, args.fps, args.save_path, args.data_name)
+                draw_pred(frame_score, proposal_dict, data_loader.dataset, video_name, args.fps, args.save_path)
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total
@@ -126,15 +125,11 @@ if __name__ == '__main__':
         for step in train_bar:
             feat, label, _, _ = next(train_loader)
             feat, label = feat.cuda(), label.cuda()
-            act_score, bkg_score, seg_score, seg_mask, _, _ = model(feat, False)
             act_attend_score, bkg_attend_score, seg_attend_score, seg_attend_mask, aas_rgb, aas_flow = model(feat)
-            cas_loss = cross_entropy(act_score, bkg_score, label)
             cas_attend_loss = cross_entropy(act_attend_score, bkg_attend_score, label)
-            aas_rgb_loss = generalized_cross_entropy(aas_rgb, seg_mask, seg_attend_mask, label)
-            aas_flow_loss = generalized_cross_entropy(aas_flow, seg_mask, seg_attend_mask, label)
-            contrastive_loss = contrastive_mining(seg_score, seg_mask, seg_attend_mask, label)
-            loss = cas_loss + cas_attend_loss + args.lambda_1 * (
-                        aas_rgb_loss + aas_flow_loss) + args.lambda_2 * contrastive_loss
+            aas_rgb_loss = generalized_cross_entropy(aas_rgb, seg_attend_mask, label)
+            aas_flow_loss = generalized_cross_entropy(aas_flow, seg_attend_mask, label)
+            loss = cas_attend_loss + args.lambda_1 * (aas_rgb_loss + aas_flow_loss)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
