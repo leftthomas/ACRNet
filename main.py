@@ -98,7 +98,7 @@ def save_loop(net, data_loader, num_iter):
     data_frame.to_csv('{}/{}.csv'.format(args.save_path, args.data_name), index_label='Step', float_format='%.3f')
     if test_info['mAP@AVG'] > best_mAP:
         best_mAP = test_info['mAP@AVG']
-        torch.save(model.state_dict(), '{}/{}.pth'.format(args.save_path, args.data_name))
+        torch.save(net.state_dict(), '{}/{}.pth'.format(args.save_path, args.data_name))
 
 
 if __name__ == '__main__':
