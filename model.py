@@ -62,7 +62,7 @@ class Model(nn.Module):
 
         self.apply(weights_init)
 
-    def forward(self, x, with_atte=True):
+    def forward(self, x):
         # [N, D, T]
         x = x.mT.contiguous()
         rgb, flow = self.mca(x[:, :1024, :], x[:, 1024:, :])
@@ -72,16 +72,12 @@ class Model(nn.Module):
         cas_flow = self.cas_flow_encoder(flow).mT.contiguous()
         cas = cas_rgb + cas_flow
         cas_score = torch.softmax(cas, dim=-1)
-        if with_atte:
-            # [N, T, 1], action activation sequence
-            aas_rgb = torch.sigmoid(self.aas_rgb_encoder(rgb).mT.contiguous())
-            aas_flow = torch.sigmoid(self.aas_flow_encoder(flow).mT.contiguous())
-            aas_score = (aas_rgb + aas_flow) / 2
-            # [N, T, C]
-            seg_score = (cas_score + aas_score) / 2
-        else:
-            aas_rgb, aas_flow = None, None
-            seg_score = cas_score
+        # [N, T, 1], action activation sequence
+        aas_rgb = torch.sigmoid(self.aas_rgb_encoder(rgb).mT.contiguous())
+        aas_flow = torch.sigmoid(self.aas_flow_encoder(flow).mT.contiguous())
+        aas_score = (aas_rgb + aas_flow) / 2
+        # [N, T, C]
+        seg_score = (cas_score + aas_score) / 2
 
         seg_mask = temporal_clustering(seg_score)
         seg_mask = mask_refining(seg_score, seg_mask, cas)
@@ -206,29 +202,3 @@ def generalized_cross_entropy(aas_score, seg_mask, label, q=0.7, eps=1e-8):
     neg_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * (1.0 - mask)).sum(dim=-1) / neg_num).mean(dim=0)
     return pos_loss + neg_loss
 
-
-def contrastive_mining(seg_score, seg_mask, seg_attend_mask, label, q=0.7, eps=1e-8):
-    # [N, 1]
-    act_num = torch.clamp_min(torch.sum(label, dim=-1), 1.0)
-    # [N, T, C]
-    rp_mask = seg_mask * seg_attend_mask
-    rn_mask = (1.0 - seg_mask) * (1.0 - seg_attend_mask)
-    fp_mask = seg_mask * (1.0 - seg_attend_mask)
-    fn_mask = (1.0 - seg_mask) * seg_attend_mask
-
-    # [N, C]
-    rp_num = torch.clamp_min(torch.sum(rp_mask, dim=1), 1.0)
-    rn_num = torch.clamp_min(torch.sum(rn_mask, dim=1), 1.0)
-    fp_num = torch.clamp_min(torch.sum(fp_mask, dim=1), 1.0)
-    fn_num = torch.clamp_min(torch.sum(fn_mask, dim=1), 1.0)
-    # [N, T, C]
-    rp_score = (1.0 - (seg_score + eps) ** q) / q
-    rn_score = (1.0 - (1.0 - seg_score + eps) ** q) / q
-    fp_score = (1.0 - (1.0 - seg_score + eps) ** q) / q
-    fn_score = (1.0 - (seg_score + eps) ** q) / q
-
-    rp_loss = (((rp_score * rp_mask * label.unsqueeze(dim=1)).sum(dim=1) / rp_num).sum(dim=-1) / act_num).mean(dim=0)
-    rn_loss = (((rn_score * rn_mask * label.unsqueeze(dim=1)).sum(dim=1) / rn_num).sum(dim=-1) / act_num).mean(dim=0)
-    fp_loss = (((fp_score * fp_mask * label.unsqueeze(dim=1)).sum(dim=1) / fp_num).sum(dim=-1) / act_num).mean(dim=0)
-    fn_loss = (((fn_score * fn_mask * label.unsqueeze(dim=1)).sum(dim=1) / fn_num).sum(dim=-1) / act_num).mean(dim=0)
-    return rp_loss + rn_loss + fp_loss + fn_loss
