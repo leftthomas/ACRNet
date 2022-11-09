@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
@@ -27,23 +25,21 @@ class ANETdetection(object):
         self.tiou_thresholds = tiou_thresholds
         self.verbose = verbose
         self.ap = None
-        self.annotation_path = os.path.join(args.path_dataset, annotation_path)
+        self.annotation_path = annotation_path
         self.prediction = None
         self._import_ground_truth(self.annotation_path)
 
-        #####
-
     def _import_ground_truth(self, annotation_path):
-        gtsegments = np.load(annotation_path + "/segments.npy", allow_pickle=True)
-        gtlabels = np.load(annotation_path + "/labels.npy", allow_pickle=True)
-        videoname = np.load(annotation_path + "/videoname.npy", allow_pickle=True)
+        gtsegments = np.load(annotation_path + "segments.npy", allow_pickle=True)
+        gtlabels = np.load(annotation_path + "labels.npy", allow_pickle=True)
+        videoname = np.load(annotation_path + "videoname.npy", allow_pickle=True)
         videoname = np.array([i.decode("utf8") for i in videoname])
-        subset = np.load(annotation_path + "/subset.npy", allow_pickle=True)
+        subset = np.load(annotation_path + "subset.npy", allow_pickle=True)
         subset = np.array([s.decode("utf-8") for s in subset])
-        classlist = np.load(annotation_path + "/classlist.npy", allow_pickle=True)
+        classlist = np.load(annotation_path + "classlist.npy", allow_pickle=True)
         classlist = np.array([c.decode("utf-8") for c in classlist])
-        duration = np.load(annotation_path + "/duration.npy", allow_pickle=True)
-        ambilist = annotation_path + "/Ambiguous_test.txt"
+        duration = np.load(annotation_path + "duration.npy", allow_pickle=True)
+        ambilist = annotation_path + "Ambiguous_test.txt"
 
         try:
             ambilist = list(open(ambilist, "r"))

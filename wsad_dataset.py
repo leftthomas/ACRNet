@@ -47,7 +47,7 @@ class SampleDataset:
             for labs in self.labels
         ]
         try:
-            ambilist = self.path_to_annotations + "/Ambiguous_test.txt"
+            ambilist = self.path_to_annotations + "Ambiguous_test.txt"
             ambilist = list(open(ambilist, "r"))
             ambilist = [a.strip("\n").split(" ")[0] for a in ambilist]
         except:
@@ -217,7 +217,7 @@ class AntSampleDataset:
             for labs in self.labels
         ]
         try:
-            ambilist = self.path_to_annotations + "/Ambiguous_test.txt"
+            ambilist = self.path_to_annotations + "Ambiguous_test.txt"
             ambilist = list(open(ambilist, "r"))
             ambilist = [a.strip("\n").split(" ")[0] for a in ambilist]
         except:

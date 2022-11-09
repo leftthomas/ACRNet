@@ -5,7 +5,6 @@ import shutil
 
 import numpy as np
 import torch
-from tensorboard_logger import Logger
 from tqdm import tqdm
 
 import model
@@ -49,7 +48,6 @@ if __name__ == '__main__':
         os.makedirs('./logs/' + args.model_name)
     if os.path.exists('./logs/' + args.model_name):
         shutil.rmtree('./logs/' + args.model_name)
-    logger = Logger('./logs/' + args.model_name)
     print(args)
     model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
 
@@ -62,13 +60,13 @@ if __name__ == '__main__':
     lrs = [args.lr, args.lr / 5, args.lr / 5 / 5]
     print(model)
     for itr in tqdm(range(args.max_iter)):
-        loss = train(itr, dataset, args, model, optimizer, logger, device)
+        loss = train(itr, dataset, args, model, optimizer, device)
         total_loss += loss
         if itr % args.interval == 0 and not itr == 0:
             print('Iteration: %d, Loss: %.5f' % (itr, total_loss / args.interval))
             total_loss = 0
             torch.save(model.state_dict(), './ckpt/last_' + args.model_name + '.pkl')
-            iou, dmap = test(itr, dataset, args, model, logger, device, pool)
+            iou, dmap = test(itr, dataset, args, model, device)
             if 'Thumos' in args.dataset_name:
                 cond = sum(dmap[:7]) > sum(max_map[:7])
             else:

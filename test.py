@@ -7,7 +7,6 @@ import pandas as pd
 import scipy.io as sio
 import torch
 import torch.nn.functional as F
-from tensorboard_logger import Logger
 from torch.autograd import Variable
 
 import model
@@ -22,7 +21,7 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 
 @torch.no_grad()
-def test(itr, dataset, args, model, logger, device, pool):
+def test(itr, dataset, args, model, device):
     model.eval()
     done = False
     instance_logits_stack = []
@@ -83,9 +82,6 @@ def test(itr, dataset, args, model, logger, device, pool):
     print('Classification map %f' % cmap)
     print('||'.join(['map @ {} = {:.3f} '.format(iou[i], dmap[i] * 100) for i in range(len(iou))]))
     print('mAP Avg ALL: {:.3f}'.format(sum(dmap) / len(iou) * 100))
-    logger.log_value('Test Classification mAP', cmap, itr)
-    for item in list(zip(dmap, iou)):
-        logger.log_value('Test Detection mAP @ IoU = ' + str(item[1]), item[0], itr)
     utils.write_to_file(args.dataset_name, dmap, cmap, itr)
     return iou, dmap
 
@@ -97,10 +93,9 @@ if __name__ == '__main__':
 
     model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
     model.load_state_dict(torch.load('./ckpt/best_' + args.model_name + '.pkl'))
-    logger = Logger('./logs/test_' + args.model_name)
     pool = mp.Pool(5)
 
-    iou, dmap = test(-1, dataset, args, model, logger, device, pool)
+    iou, dmap = test(-1, dataset, args, model, device)
     print('mAP Avg 0.1-0.5: {}, mAP Avg 0.1-0.7: {}, mAP Avg ALL: {}'.format(np.mean(dmap[:5]) * 100,
                                                                              np.mean(dmap[:7]) * 100,
                                                                              np.mean(dmap) * 100))
