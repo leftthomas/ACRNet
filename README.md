@@ -1,9 +1,9 @@
-# RelationNet
+# ACRNet
 
-A PyTorch implementation of RelationNet based on CVPR 2023 paper
-[Mining Relations for Weakly-Supervised Action Localization]().
+A PyTorch implementation of ACRNet based on ICME 2023 paper
+[Weakly-supervised Temporal Action Localization with Adaptive Clustering and Refining Network]().
 
-![Network Architecture](result/structure.png)
+![Network Architecture](result/model.png)
 
 ## Requirements
 
