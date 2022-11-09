@@ -1,14 +1,8 @@
-# This code is originally from the official ActivityNet repo
-# https://github.com/activitynet/ActivityNet
-# Small modification from ActivityNet Code
-from __future__ import print_function
-
 import os
 
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
-from scipy.signal import savgol_filter, medfilt
 
 from eval.utils_eval import interpolated_prec_rec
 from eval.utils_eval import segment_iou
@@ -16,89 +10,6 @@ from eval.utils_eval import segment_iou
 
 def str2ind(categoryname, classlist):
     return [i for i in range(len(classlist)) if categoryname == classlist[i]][0]
-
-
-def strlist2indlist(strlist, classlist):
-    return [str2ind(s, classlist) for s in strlist]
-
-
-def sigmoid(x, eps=1e-10):
-    return 1 / (1 + np.exp(-x) + eps)
-
-
-def smooth(v, order=2, lens=200):
-    # return v
-    l = min(lens, len(v))
-    l = l - (1 - l % 2)
-    if len(v) <= order:
-        return v
-    return savgol_filter(v, l, order)
-
-
-def smooth_medfilt(v, lens=200):
-    l = min(lens, len(v))
-    l = l - (1 - l % 2)
-    if len(v) <= lens:
-        return v
-    return medfilt(v, l)
-
-
-def filter_segments(segment_predict, videonames, ambilist):
-    ind = np.zeros(np.shape(segment_predict)[0])
-    for i in range(np.shape(segment_predict)[0]):
-        vn = videonames[int(segment_predict[i, 0])]
-        for a in ambilist:
-            if a[0] == vn:
-                gt = range(
-                    int(round(float(a[2]) * 25 / 16)), int(round(float(a[3]) * 25 / 16))
-                )
-                gt = range(
-                    int(round(float(a[2]) * 25 / 16)), int(round(float(a[3]) * 25 / 16))
-                )
-                pd = range(int(segment_predict[i][1]), int(segment_predict[i][2]))
-                IoU = float(len(set(gt).intersection(set(pd)))) / float(
-                    len(set(gt).union(set(pd)))
-                )
-                if IoU > 0:
-                    ind[i] = 1
-    s = [
-        segment_predict[i, :]
-        for i in range(np.shape(segment_predict)[0])
-        if ind[i] == 0
-    ]
-    return np.array(s)
-
-
-def moving_smooth(y, box_size):
-    assert box_size % 2 == 1, 'The bosx size should be ood'
-    box = np.ones(box_size) / box_size
-    y = np.array([y[0]] * (box_size // 2) + y.tolist() + [y[-1]] * (box_size // 2))
-    y_smooth = np.convolve(y, box, mode='valid')
-    return y_smooth
-
-
-def gaussian_smooth(score, sigma=30):
-    # r = score.shape[0] //39
-    # if r%2==0:
-    #     r+=1
-    r = 125
-    if r > score.shape[0] // 2:
-        r = score.shape[0] // 2 - 1
-    if r % 2 == 0:
-        r += 1
-    gaussian_temp = np.ones(r * 2 - 1)
-    for i in range(r * 2 - 1):
-        gaussian_temp[i] = np.exp(-(i - r) ** 2 / (2 * sigma ** 2)) / (sigma * np.sqrt(2 * np.pi))
-    new_score = score
-    for i in range(r, score.shape[0] - r):
-        new_score[i] = np.dot(score[i - r:i + r - 1], gaussian_temp)
-    return new_score
-
-
-def min_max_norm(p):
-    min_p = np.min(p)
-    max_p = np.max(p)
-    return (p - min_p) / (max_p - min_p)
 
 
 class ANETdetection(object):
@@ -189,71 +100,11 @@ class ANETdetection(object):
     def get_topk_mean(self, x, k, axis=0):
         return np.mean(np.sort(x, axis=axis)[-int(k):, :], axis=0)
 
-    def _get_vid_score(self, pred):
-        # pred : (n, class)
-        if self.args is None:
-            k = 8
-            topk_mean = self.get_topk_mean(pred, k)
-            # ind = topk_mean > -50
-            return pred, topk_mean
-
-        win_size = int(self.args.topk)
-        split_list = [i * win_size for i in range(1, int(pred.shape[0] // win_size))]
-        splits = np.split(pred, split_list, axis=0)
-
-        tops = []
-        # select the avg over topk2 segments in each window
-        for each_split in splits:
-            top_mean = self.get_topk_mean(each_split, self.args.topk2)
-            tops.append(top_mean)
-        tops = np.array(tops)
-        c_s = np.max(tops, axis=0)
-        return pred, c_s
-
-    def _get_vid_score_1(self, p):
-        pp = - p;
-        [pp[:, i].sort() for i in range(np.shape(pp)[1])];
-        pp = -pp
-        if int(np.shape(pp)[0] / 8) > 0:
-            c_s = np.mean(pp[:int(np.shape(pp)[0] / 8), :], axis=0)
-        else:
-            c_s = np.mean(pp[:np.shape(pp)[0], :], axis=0)
-        return p, c_s
-
     def _get_att_topk_mean(self, p, att_logits, k):
         args_topk = np.argsort(att_logits, axis=0)[-k:]
         topk_mean = 1 / (1 + np.exp(-np.mean(att_logits[args_topk], axis=0))) * 1 / (
                 1 + np.exp(-np.mean(p[args_topk], axis=0)))
         return topk_mean
-
-    def _get_vid_score_2(self, p, att_logits):
-        if self.args is None:
-            k = 8
-            topk_mean = self._get_att_topk_mean(p, att_logits, k)
-            return p, topk_mean
-        win_size = int(self.args.topk)
-        split_list = [i * win_size for i in range(1, int(p.shape[0] // win_size))]
-        p_splits = np.split(p, split_list, axis=0)
-        att_splits = np.split(att_logits, split_list, axis=0)
-
-        tops = []
-        for p_s, a_s in zip(p_splits, att_splits):
-            top_mean = self._get_att_topk_mean(p_s, a_s, self.args.topk2)
-            tops.append(top_mean)
-        tops = np.array(tops)
-        c_s = np.max(tops, axis=0)
-        return p, c_s
-
-    def OIC_Cofidence(self, s, e, cls_pred, c_s, _lambda=0.25):
-        for i in range(len(s)):
-            seg = cls_pred[s[i]:e[i]]
-            inner_score = np.mean(seg)
-            proposal_len = e[i] - s[i]
-            outer_s = max(0, int(s[i] - proposal_len * _lambda))
-            outer_e = min(cls_pred.shape[0], int(e[i] - proposal_len * _lambda))
-
-            front_outer_score = np.mean(cls_pred[outer_s:s[i]])
-            back_outer_score = np.mean(cls_pred[e[i]:outer_e])
 
     def _get_predictions_with_label(self, prediction_by_label, label_name, cidx):
         """Get all predicitons of the given label. Return empty DataFrame if there
@@ -316,15 +167,6 @@ class ANETdetection(object):
                 print("Detection map @ %f = %f" % (self.tiou_thresholds[k], self.mAP[k]))
             print("Average-mAP: {}\n".format(self.mAP))
         return self.mAP
-
-    def save_info(self, fname):
-        import pickle
-        Dat = {
-            "prediction": self.prediction,
-            "gt": self.ground_truth
-        }
-        with open(fname, 'wb') as fp:
-            pickle.dump(Dat, fp)
 
 
 def compute_average_precision_detection(

@@ -1,10 +1,7 @@
-from __future__ import print_function
-
 import os
 
 import numpy as np
 
-import options
 import utils.wsad_utils as utils
 
 
@@ -84,9 +81,7 @@ class SampleDataset:
 
     def load_data(self, n_similar=0, is_training=True, similar_size=2):
         if is_training:
-            labels = []
             idx = []
-
             # Load similar pairs
             if n_similar != 0:
                 rand_classid = np.random.choice(
@@ -137,8 +132,6 @@ class SampleDataset:
         else:
             labs = self.labels_multihot[self.testidx[self.currenttestidx]]
             feat = self.features[self.testidx[self.currenttestidx]]
-            # feat = utils.process_feat(feat, normalize=self.normalize)
-            # feature = feature[sample_idx]
             vn = self.videonames[self.testidx[self.currenttestidx]]
             if self.currenttestidx == len(self.testidx) - 1:
                 done = True
@@ -152,40 +145,6 @@ class SampleDataset:
             elif self.mode == "flow":
                 feat = feat[..., self.feature_size:]
             return feat, np.array(labs), vn, done
-
-    def random_avg(self, x, segm=None):
-        if len(x) < self.num_segments:
-            ind = self.random_perturb(len(x))
-            x_n = x[ind]
-            segm = segm[ind] if segm is not None else None
-            return x_n, segm
-        else:
-            inds = np.array_split(np.arange(len(x)), self.num_segments)
-            x_n = np.zeros((self.num_segments, x.shape[-1])).astype(x.dtype)
-            segm_n = np.zeros(
-                (self.num_segments, segm.shape[-1])).astype(x.dtype)
-            for i, ind in enumerate(inds):
-                x_n[i] = np.mean(x[ind], axis=0)
-                if segm is not None:
-                    segm_n[i] = segm[(ind[0] + ind[-1]) // 2]
-            return x_n, segm_n if segm is not None else None
-
-    def random_pad(self, x, segm=None):
-        length = self.num_segments
-        if x.shape[0] > length:
-            strt = np.random.randint(0, x.shape[0] - length)
-            x_ret = x[strt:strt + length]
-            if segm is not None:
-                segm = segm[strt:strt + length]
-                return x_ret, segm
-        elif x.shape[0] == length:
-            return x, segm
-        else:
-            pad_len = length - x.shape[0]
-            x_ret = np.pad(x, ((0, pad_len), (0, 0)), mode='constant')
-            if segm is not None:
-                segm = np.pad(segm, ((0, pad_len), (0, 0)), mode='constant')
-            return x_ret, segm
 
     def random_perturb(self, length):
         if self.num_segments == length:
@@ -308,7 +267,6 @@ class AntSampleDataset:
 
     def load_data(self, n_similar=0, is_training=True, similar_size=2):
         if is_training:
-            labels = []
             idx = []
             # Load similar pairs
             if n_similar != 0:
@@ -360,8 +318,6 @@ class AntSampleDataset:
         else:
             labs = self.labels_multihot[self.testidx[self.currenttestidx]]
             feat = self.features[self.testidx[self.currenttestidx]]
-            # feat = utils.process_feat(feat, normalize=self.normalize)
-            # feature = feature[sample_idx]
             vn = self.videonames[self.testidx[self.currenttestidx]]
             if self.currenttestidx == len(self.testidx) - 1:
                 done = True
@@ -375,40 +331,6 @@ class AntSampleDataset:
             elif self.mode == "flow":
                 feat = feat[..., self.feature_size:]
             return feat, np.array(labs), vn, done
-
-    def random_avg(self, x, segm=None):
-        if len(x) < self.num_segments:
-            ind = self.random_perturb(len(x))
-            x_n = x[ind]
-            segm = segm[ind] if segm is not None else None
-            return x_n, segm
-        else:
-            inds = np.array_split(np.arange(len(x)), self.num_segments)
-            x_n = np.zeros((self.num_segments, x.shape[-1])).astype(x.dtype)
-            segm_n = np.zeros(
-                (self.num_segments, segm.shape[-1])).astype(x.dtype)
-            for i, ind in enumerate(inds):
-                x_n[i] = np.mean(x[ind], axis=0)
-                if segm is not None:
-                    segm_n[i] = segm[(ind[0] + ind[-1]) // 2]
-            return x_n, segm_n if segm is not None else None
-
-    def random_pad(self, x, segm=None):
-        length = self.num_segments
-        if x.shape[0] > length:
-            strt = np.random.randint(0, x.shape[0] - length)
-            x_ret = x[strt:strt + length]
-            if segm is not None:
-                segm = segm[strt:strt + length]
-                return x_ret, segm
-        elif x.shape[0] == length:
-            return x, segm
-        else:
-            pad_len = length - x.shape[0]
-            x_ret = np.pad(x, ((0, pad_len), (0, 0)), mode='constant')
-            if segm is not None:
-                segm = np.pad(segm, ((0, pad_len), (0, 0)), mode='constant')
-            return x_ret, segm
 
     def random_perturb(self, length):
         if self.num_segments == length:
@@ -436,14 +358,3 @@ class AntSampleDataset:
         samples = np.arange(self.num_segments) * length / self.num_segments
         samples = np.floor(samples)
         return samples.astype(int)
-
-
-if __name__ == '__main__':
-    args = options.parser.parse_args()
-    dt = SampleDataset(args)
-    data = dt.load_data()
-    print(data)
-    import pdb
-
-    pdb.set_trace()
-    print(dt)

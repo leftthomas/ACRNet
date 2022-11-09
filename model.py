@@ -11,9 +11,9 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 
 # Multi-head Cross Modal Attention
-class CMA(nn.Module):
+class MCA(nn.Module):
     def __init__(self, feat_dim, num_head):
-        super(CMA, self).__init__()
+        super(MCA, self).__init__()
         self.rgb_proj = nn.Parameter(torch.empty(num_head, feat_dim, feat_dim // num_head))
         self.flow_proj = nn.Parameter(torch.empty(num_head, feat_dim, feat_dim // num_head))
         self.atte = nn.Parameter(torch.empty(num_head, feat_dim // num_head, feat_dim // num_head))
@@ -45,9 +45,6 @@ class CMA(nn.Module):
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1 or classname.find('Linear') != -1:
-        # torch_init.xavier_uniform_(m.weight)
-        # import pdb
-        # pdb.set_trace()
         torch_init.kaiming_uniform_(m.weight)
         if type(m.bias) != type(None):
             m.bias.data.fill_(0)
@@ -89,7 +86,7 @@ class CO2(torch.nn.Module):
         dropout_ratio = args['opt'].dropout_ratio
         reduce_ratio = args['opt'].reduce_ratio
 
-        self.cma = CMA(n_feature // 2, args['opt'].num_head)
+        self.cma = MCA(n_feature // 2, args['opt'].num_head)
 
         self.vAttn = getattr(model, args['opt'].AWM)(1024, args)
         self.fAttn = getattr(model, args['opt'].AWM)(1024, args)
@@ -102,8 +99,6 @@ class CO2(torch.nn.Module):
             nn.Dropout(dropout_ratio),
             nn.Conv1d(embed_dim, embed_dim, 3, padding=1), nn.LeakyReLU(0.2),
             nn.Dropout(0.7), nn.Conv1d(embed_dim, n_class + 1, 1))
-        # self.cadl = CADL()
-        # self.attention = Non_Local_Block(embed_dim,mid_dim,dropout_ratio)
 
         self.channel_avg = nn.AdaptiveAvgPool1d(1)
         self.batch_avg = nn.AdaptiveAvgPool1d(1)
@@ -125,12 +120,8 @@ class CO2(torch.nn.Module):
         nfeat = self.fusion(nfeat)
         x_cls = self.classifier(nfeat)
 
-        # fg_mask, bg_mask,dropped_fg_mask = self.cadl(x_cls, x_atn, include_min=True)
-
         return {'feat': nfeat.transpose(-1, -2), 'cas': x_cls.transpose(-1, -2), 'attn': x_atn.transpose(-1, -2),
                 'v_atn': v_atn.transpose(-1, -2), 'f_atn': f_atn.transpose(-1, -2)}
-        # ,fg_mask.transpose(-1, -2), bg_mask.transpose(-1, -2),dropped_fg_mask.transpose(-1, -2)
-        # return att_sigmoid,att_logit, feat_emb, bag_logit, instance_logit
 
     def _multiply(self, x, atn, dim=-1, include_min=False):
         if include_min:
@@ -182,9 +173,6 @@ class CO2(torch.nn.Module):
                       args['opt'].alpha4 * mutual_loss +
                       args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3 +
                       args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3)
-
-        # output = torch.cosine_similarity(dropped_fg_feat, fg_feat, dim=1)
-        # pdb.set_trace()
 
         return total_loss
 
@@ -279,8 +267,6 @@ class ANT_CO2(torch.nn.Module):
             nn.Dropout(dropout_ratio),
             nn.Conv1d(embed_dim, embed_dim, 3, padding=1), nn.LeakyReLU(0.2),
             nn.Dropout(0.7), nn.Conv1d(embed_dim, n_class + 1, 1))
-        # self.cadl = CADL()
-        # self.attention = Non_Local_Block(embed_dim,mid_dim,dropout_ratio)
 
         self.channel_avg = nn.AdaptiveAvgPool1d(1)
         self.batch_avg = nn.AdaptiveAvgPool1d(1)
@@ -290,7 +276,7 @@ class ANT_CO2(torch.nn.Module):
             if _kernel is not None else nn.Identity()
         self.apply(weights_init)
 
-        self.cma = CMA(n_feature // 2, args['opt'].num_head)
+        self.cma = MCA(n_feature // 2, args['opt'].num_head)
 
     def forward(self, inputs, is_training=True, **args):
         rgb, flow = inputs[:, :, :1024], inputs[:, :, 1024:]
@@ -309,12 +295,9 @@ class ANT_CO2(torch.nn.Module):
         x_atn = self.pool(x_atn)
         f_atn = self.pool(f_atn)
         v_atn = self.pool(v_atn)
-        # fg_mask, bg_mask,dropped_fg_mask = self.cadl(x_cls, x_atn, include_min=True)
 
         return {'feat': nfeat.transpose(-1, -2), 'cas': x_cls.transpose(-1, -2), 'attn': x_atn.transpose(-1, -2),
                 'v_atn': v_atn.transpose(-1, -2), 'f_atn': f_atn.transpose(-1, -2)}
-        # ,fg_mask.transpose(-1, -2), bg_mask.transpose(-1, -2),dropped_fg_mask.transpose(-1, -2)
-        # return att_sigmoid,att_logit, feat_emb, bag_logit, instance_logit
 
     def _multiply(self, x, atn, dim=-1, include_min=False):
         if include_min:
@@ -365,9 +348,6 @@ class ANT_CO2(torch.nn.Module):
             'opt'].alpha3 * loss_3_supp_Contrastive + mutual_loss +
                       args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3 +
                       args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3)
-
-        # output = torch.cosine_similarity(dropped_fg_feat, fg_feat, dim=1)
-        # pdb.set_trace()
 
         return total_loss
 

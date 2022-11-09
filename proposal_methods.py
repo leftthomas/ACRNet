@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import torch
-from scipy.signal import savgol_filter
 
 import options
 import utils.wsad_utils as utils
@@ -38,14 +37,6 @@ def filter_segments(segment_predict, vn):
     return np.array(s)
 
 
-def smooth(v, order=2, lens=200):
-    l = min(lens, len(v))
-    l = l - (1 - l % 2)
-    if len(v) <= order:
-        return v
-    return savgol_filter(v, l, order)
-
-
 def get_topk_mean(x, k, axis=0):
     return np.mean(np.sort(x, axis=axis)[-int(k):, :], axis=0)
 
@@ -60,51 +51,13 @@ def get_cls_score(element_cls, dim=-2, rat=20, ind=None):
     return pred_vid_score
 
 
-def _get_vid_score(pred):
-    # pred : (n, class)
-    if args is None:
-        k = 8
-        topk_mean = self.get_topk_mean(pred, k)
-        # ind = topk_mean > -50
-        return pred, topk_mean
-
-    win_size = int(args.topk)
-    split_list = [i * win_size for i in range(1, int(pred.shape[0] // win_size))]
-    splits = np.split(pred, split_list, axis=0)
-
-    tops = []
-    # select the avg over topk2 segments in each window
-    for each_split in splits:
-        top_mean = get_topk_mean(each_split, args.topk2)
-        tops.append(top_mean)
-    tops = np.array(tops)
-    c_s = np.max(tops, axis=0)
-    return pred, c_s
-
-
-def __vector_minmax_norm(vector, min_val=None, max_val=None):
-    if min_val is None or max_val is None:
-        max_val = np.max(vector)
-        min_val = np.min(vector)
-
-    delta = max_val - min_val
-    # delta[delta <= 0] = 1
-    ret = (vector - min_val) / delta
-
-    return ret
-
-
 @torch.no_grad()
 def multiple_threshold_hamnet(vid_name, data_dict):
     elem = data_dict['cas']
     element_atn = data_dict['attn']
-    act_thresh_cas = np.arange(0.1, 0.9, 10)
     element_logits = elem * element_atn
-    # element_logits = data_dict['cas_supp']
     pred_vid_score = get_cls_score(element_logits, rat=10)
     score_np = pred_vid_score.copy()
-    # score_np[score_np < 0.2] = 0
-    # score_np[score_np >= 0.2] = 1
     cas_supp = element_logits[..., :-1]
     cas_supp_atn = element_atn
 
@@ -112,9 +65,7 @@ def multiple_threshold_hamnet(vid_name, data_dict):
 
     # NOTE: threshold
     act_thresh = np.linspace(0.1, 0.9, 10)
-    # act_thresh = np.linspace(0.2,0.4,10)
 
-    prediction = None
     if len(pred) == 0:
         pred = np.array([np.argmax(pred_vid_score)])
     cas_pred = cas_supp[0].cpu().numpy()[:, pred]
@@ -159,12 +110,7 @@ def multiple_threshold_hamnet(vid_name, data_dict):
     for class_id in proposal_dict.keys():
         final_proposals.append(
             utils.soft_nms(proposal_dict[class_id], 0.7, sigma=0.3))
-    # self.final_res["results"][vid_name[0]] = utils.result2json(
-    # final_proposals, class_dict)
 
-    video_lst, t_start_lst, t_end_lst = [], [], []
-    label_lst, score_lst = [], []
-    # [c_pred[i], c_score, t_start, t_end]
     segment_predict = []
     for i in range(len(final_proposals)):
         for j in range(len(final_proposals[i])):

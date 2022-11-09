@@ -1,19 +1,4 @@
-# This code is originally from the official ActivityNet repo
-# https://github.com/activitynet/ActivityNet
-
-import json
-import urllib.request
-
 import numpy as np
-
-API = 'http://ec2-52-11-11-89.us-west-2.compute.amazonaws.com/challenge17/api.py'
-
-
-def get_blocked_videos(api=API):
-    api_url = '{}?action=get_blocked'.format(api)
-    req = urllib.request.Request(api_url)
-    response = urllib.request.urlopen(req)
-    return json.loads(response.read().decode('utf-8'))
 
 
 def interpolated_prec_rec(prec, rec):
@@ -56,27 +41,3 @@ def segment_iou(target_segment, candidate_segments):
     tIoU = segments_intersection.astype(float) / segments_union
     return tIoU
 
-
-def wrapper_segment_iou(target_segments, candidate_segments):
-    """Compute intersection over union btw segments
-    Parameters
-    ----------
-    target_segments : ndarray
-        2-dim array in format [m x 2:=[init, end]]
-    candidate_segments : ndarray
-        2-dim array in format [n x 2:=[init, end]]
-    Outputs
-    -------
-    tiou : ndarray
-        2-dim array [n x m] with IOU ratio.
-    Note: It assumes that candidate-segments are more scarce that target-segments
-    """
-    if candidate_segments.ndim != 2 or target_segments.ndim != 2:
-        raise ValueError('Dimension of arguments is incorrect')
-
-    n, m = candidate_segments.shape[0], target_segments.shape[0]
-    tiou = np.empty((n, m))
-    for i in range(m):
-        tiou[:, i] = segment_iou(target_segments[i, :], candidate_segments)
-
-    return tiou

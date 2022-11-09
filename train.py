@@ -12,13 +12,10 @@ def train(itr, dataset, args, model, optimizer, logger, device):
 
     features = torch.from_numpy(features).float().to(device)
     labels = torch.from_numpy(labels).float().to(device)
-    # interative
-    pseudo_label = None
 
     outputs = model(features, seq_len=seq_len, is_training=True, itr=itr, opt=args)
     total_loss = model.criterion(outputs, labels, seq_len=seq_len, device=device, logger=logger, opt=args, itr=itr,
                                  pairs_id=pairs_id, inputs=features)
-    # print('Iteration: %d, Loss: %.3f' %(itr, total_loss.data.cpu().numpy()))
 
     optimizer.zero_grad()
     total_loss.backward()
