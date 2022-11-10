@@ -51,7 +51,7 @@ def weights_init(m):
 
 
 class BWA_fusion_dropout_feat_v2(torch.nn.Module):
-    def __init__(self, n_feature, n_class, **args):
+    def __init__(self, n_feature):
         super().__init__()
         embed_dim = 1024
         self.bit_wise_attn = nn.Sequential(
@@ -77,19 +77,16 @@ class BWA_fusion_dropout_feat_v2(torch.nn.Module):
 
 
 # fusion split modal single+ bit_wise_atten dropout+ contrastive + mutual learning +fusion feat(cat)
-# ------TOP!!!!!!!!!!
 class CO2(torch.nn.Module):
     def __init__(self, n_feature, n_class, **args):
         super().__init__()
         embed_dim = 2048
-        mid_dim = 1024
         dropout_ratio = args['opt'].dropout_ratio
-        reduce_ratio = args['opt'].reduce_ratio
 
         self.cma = MCA(n_feature // 2, args['opt'].num_head)
 
-        self.vAttn = getattr(model, args['opt'].AWM)(1024, args)
-        self.fAttn = getattr(model, args['opt'].AWM)(1024, args)
+        self.vAttn = getattr(model, args['opt'].AWM)(1024)
+        self.fAttn = getattr(model, args['opt'].AWM)(1024)
 
         self.feat_encoder = nn.Sequential(
             nn.Conv1d(n_feature, embed_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(dropout_ratio))
@@ -111,8 +108,6 @@ class CO2(torch.nn.Module):
         rgb, flow = self.cma(rgb, flow)
         feat = torch.cat((rgb, flow), dim=-1).transpose(-2, -1)
 
-        b, c, n = feat.size()
-        # feat = self.feat_encoder(x)
         v_atn, vfeat = self.vAttn(feat[:, :1024, :], feat[:, 1024:, :])
         f_atn, ffeat = self.fAttn(feat[:, 1024:, :], feat[:, :1024, :])
         x_atn = (f_atn + v_atn) / 2
@@ -135,8 +130,7 @@ class CO2(torch.nn.Module):
         v_atn = outputs['v_atn']
         f_atn = outputs['f_atn']
         mutual_loss = 0.5 * F.mse_loss(v_atn, f_atn.detach()) + 0.5 * F.mse_loss(f_atn, v_atn.detach())
-        # learning weight dynamic, lambda1 (1-lambda1)
-        b, n, c = element_logits.shape
+
         element_logits_supp = self._multiply(element_logits, element_atn, include_min=True)
         loss_mil_orig, _ = self.topkloss(element_logits,
                                          labels,
@@ -242,22 +236,15 @@ class CO2(torch.nn.Module):
         sim_loss = sim_loss / n_tmp
         return sim_loss
 
-    def decompose(self, outputs, **args):
-        feat, element_logits, atn_supp, atn_drop, element_atn = outputs
-
-        return element_logits, element_atn
-
 
 class ANT_CO2(torch.nn.Module):
     def __init__(self, n_feature, n_class, **args):
         super().__init__()
         embed_dim = 2048
-        mid_dim = 1024
         dropout_ratio = args['opt'].dropout_ratio
-        reduce_ratio = args['opt'].reduce_ratio
 
-        self.vAttn = getattr(model, args['opt'].AWM)(1024, args)
-        self.fAttn = getattr(model, args['opt'].AWM)(1024, args)
+        self.vAttn = getattr(model, args['opt'].AWM)(1024)
+        self.fAttn = getattr(model, args['opt'].AWM)(1024)
 
         self.feat_encoder = nn.Sequential(
             nn.Conv1d(n_feature, embed_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(dropout_ratio))
@@ -283,8 +270,6 @@ class ANT_CO2(torch.nn.Module):
         rgb, flow = self.cma(rgb, flow)
         feat = torch.cat((rgb, flow), dim=-1).transpose(-2, -1)
 
-        b, c, n = feat.size()
-        # feat = self.feat_encoder(x)
         v_atn, vfeat = self.vAttn(feat[:, :1024, :], feat[:, 1024:, :])
         f_atn, ffeat = self.fAttn(feat[:, 1024:, :], feat[:, :1024, :])
         x_atn = (f_atn + v_atn) / 2
@@ -311,8 +296,6 @@ class ANT_CO2(torch.nn.Module):
         v_atn = outputs['v_atn']
         f_atn = outputs['f_atn']
         mutual_loss = 0.5 * F.mse_loss(v_atn, f_atn.detach()) + 0.5 * F.mse_loss(f_atn, v_atn.detach())
-        # learning weight dynamic, lambda1 (1-lambda1)
-        b, n, c = element_logits.shape
         element_logits_supp = self._multiply(element_logits, element_atn, include_min=True)
         loss_mil_orig, _ = self.topkloss(element_logits,
                                          labels,
@@ -416,8 +399,3 @@ class ANT_CO2(torch.nn.Module):
             n_tmp = n_tmp + torch.sum(labels[i, :] * labels[i + 1, :])
         sim_loss = sim_loss / n_tmp
         return sim_loss
-
-    def decompose(self, outputs, **args):
-        feat, element_logits, atn_supp, atn_drop, element_atn = outputs
-
-        return element_logits, element_atn

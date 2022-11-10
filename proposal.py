@@ -95,7 +95,7 @@ def multiple_threshold_hamnet(vid_name, data_dict):
 
                 proposal_dict[class_id] += proposals[j]
             except IndexError:
-                logger.error(f"Index error")
+                print(f"Index error")
     final_proposals = []
     for class_id in proposal_dict.keys():
         final_proposals.append(
