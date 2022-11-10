@@ -6,9 +6,9 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-import dataset
-import model
 import options
+from dataset import SampleDataset
+from model import CO2
 from test import test
 from train import train
 
@@ -36,13 +36,13 @@ if __name__ == '__main__':
     print('=============seed: {}, pid: {}============='.format(seed, os.getpid()))
     setup_seed(seed)
     device = torch.device("cuda")
-    dataset = getattr(dataset, args.dataset)(args)
+    dataset = SampleDataset(args)
     if 'Thumos' in args.dataset_name:
         max_map = [0] * 9
     else:
         max_map = [0] * 10
     print(args)
-    model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
+    model = CO2(dataset.feature_size, dataset.num_class, opt=args).to(device)
 
     if args.pretrained_ckpt is not None:
         model.load_state_dict(torch.load(args.pretrained_ckpt))

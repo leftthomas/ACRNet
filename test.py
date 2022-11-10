@@ -8,11 +8,11 @@ import torch
 import torch.nn.functional as F
 
 import dataset
-import model
 import options
 import proposal as PM
 import utils
 from eval import ANETdetection
+from model import CO2
 from utils import getClassificationMAP as cmAP
 
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -40,7 +40,7 @@ def test(itr, dataset, args, model, device):
             outputs = model(features, is_training=False, seq_len=seq_len)
             element_logits = outputs['cas']
             results[vn] = {'cas': outputs['cas'], 'attn': outputs['attn']}
-            proposals.append(getattr(PM, args.proposal_method)(vn, outputs))
+            proposals.append(PM.multiple_threshold_hamnet(vn, outputs))
             logits = element_logits.squeeze(0)
         tmp = F.softmax(torch.mean(torch.topk(logits, k=int(np.ceil(len(features) / 8)), dim=0)[0], dim=0),
                         dim=0).cpu().data.numpy()
@@ -85,9 +85,9 @@ def test(itr, dataset, args, model, device):
 if __name__ == '__main__':
     args = options.parser.parse_args()
     device = torch.device("cuda")
-    dataset = getattr(dataset, args.dataset)(args)
+    dataset = dataset.SampleDataset(args)
 
-    model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
+    model = CO2(dataset.feature_size, dataset.num_class, opt=args).to(device)
     model.load_state_dict(torch.load('result/best_' + args.model_name + '.pkl'))
     pool = mp.Pool(5)
 
