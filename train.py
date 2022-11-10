@@ -13,11 +13,11 @@ def train(itr, dataset, args, model, optimizer, device):
     features = torch.from_numpy(features).float().to(device)
     labels = torch.from_numpy(labels).float().to(device)
 
-    outputs = model(features, seq_len=seq_len, is_training=True, itr=itr, opt=args)
+    outputs = model(features)
     total_loss = model.criterion(outputs, labels, seq_len=seq_len, device=device, opt=args, itr=itr,
                                  pairs_id=pairs_id, inputs=features)
 
     optimizer.zero_grad()
     total_loss.backward()
     optimizer.step()
-    return total_loss.data.cpu().numpy()
+    return total_loss.detach().cpu().numpy()

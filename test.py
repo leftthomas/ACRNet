@@ -1,4 +1,3 @@
-import multiprocessing as mp
 from collections import defaultdict
 
 import numpy as np
@@ -37,13 +36,13 @@ def test(itr, dataset, args, model, device):
             continue
         features = torch.from_numpy(features).float().to(device).unsqueeze(0)
         with torch.no_grad():
-            outputs = model(features, is_training=False, seq_len=seq_len)
+            outputs = model(features)
             element_logits = outputs['cas']
             results[vn] = {'cas': outputs['cas'], 'attn': outputs['attn']}
             proposals.append(PM.multiple_threshold_hamnet(vn, outputs))
             logits = element_logits.squeeze(0)
         tmp = F.softmax(torch.mean(torch.topk(logits, k=int(np.ceil(len(features) / 8)), dim=0)[0], dim=0),
-                        dim=0).cpu().data.numpy()
+                        dim=0).cpu().detach().numpy()
 
         instance_logits_stack.append(tmp)
         labels_stack.append(labels)
@@ -89,7 +88,6 @@ if __name__ == '__main__':
 
     model = CO2(dataset.feature_size, dataset.num_class, opt=args).to(device)
     model.load_state_dict(torch.load('result/best_' + args.model_name + '.pkl'))
-    pool = mp.Pool(5)
 
     iou, dmap = test(-1, dataset, args, model, device)
     print('mAP Avg 0.1-0.5: {}, mAP Avg 0.1-0.7: {}, mAP Avg ALL: {}'.format(np.mean(dmap[:5]) * 100,

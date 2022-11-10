@@ -15,8 +15,6 @@ parser.add_argument('--num-similar', default=3, type=int,
                     help='number of similar pairs in a batch of data  (default: 3)')
 parser.add_argument('--seed', type=int, default=3552, help='random seed (default: 1)')
 parser.add_argument('--max-iter', type=int, default=20000, help='maximum iteration to train (default: 50000)')
-parser.add_argument('--feature-type', type=str, default='I3D',
-                    help='type of feature to be used I3D or UNT (default: I3D)')
 parser.add_argument('--interval', type=int, default=200, help='time interval of performing the test')
 parser.add_argument('--similar-size', type=int, default=2)
 

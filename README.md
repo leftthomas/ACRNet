@@ -64,8 +64,8 @@ You can easily train and test the model by running the script below. If you want
 ### Train Model
 
 ```
-python main.py --max-seqlen 500 --lr 0.00005 --k 7 --dataset-name Thumos14reduced --path-dataset path/to/Thumos14 --num-class 20 --max-iter 5000 --weight_decay 0.001 --model-name CO2_3552 --seed 3552
-python main.py --k 5 --dataset-name ActivityNet1.2 --path-dataset path/to/ActivityNet1.2 --num-class 100 --lr 3e-5 --max-seqlen 60 --model-name ANT_CO2_3552 --seed 3552 --max-iter 22000
+python main.py --max-seqlen 500 --lr 0.00005 --k 7 --dataset-name Thumos14reduced --path-dataset path/to/Thumos14 --num-class 20 --max-iter 5000 --weight_decay 0.001 --model-name CO2_3552
+python main.py --k 5 --dataset-name ActivityNet1.2 --path-dataset path/to/ActivityNet1.2 --num-class 100 --lr 3e-5 --max-seqlen 60 --model-name ANT_CO2_3552 --max-iter 22000
 ```
 
 ### Test Model

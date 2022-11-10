@@ -48,7 +48,7 @@ def weights_init(m):
             m.bias.data.fill_(0)
 
 
-class BWA_fusion_dropout_feat_v2(torch.nn.Module):
+class BWA(torch.nn.Module):
     def __init__(self, n_feature):
         super().__init__()
         embed_dim = 1024
@@ -56,13 +56,9 @@ class BWA_fusion_dropout_feat_v2(torch.nn.Module):
             nn.Conv1d(n_feature, embed_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5))
         self.channel_conv = nn.Sequential(
             nn.Conv1d(n_feature, embed_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5))
-        self.attention = nn.Sequential(nn.Conv1d(embed_dim, 512, 3, padding=1),
-                                       nn.LeakyReLU(0.2),
-                                       nn.Dropout(0.5),
-                                       nn.Conv1d(512, 512, 3, padding=1),
-                                       nn.LeakyReLU(0.2), nn.Conv1d(512, 1, 1),
-                                       nn.Dropout(0.5),
-                                       nn.Sigmoid())
+        self.attention = nn.Sequential(nn.Conv1d(embed_dim, 512, 3, padding=1), nn.LeakyReLU(0.2),
+                                       nn.Dropout(0.5), nn.Conv1d(512, 512, 3, padding=1),
+                                       nn.LeakyReLU(0.2), nn.Conv1d(512, 1, 1), nn.Dropout(0.5), nn.Sigmoid())
         self.channel_avg = nn.AdaptiveAvgPool1d(1)
 
     def forward(self, vfeat, ffeat):
@@ -84,8 +80,8 @@ class CO2(torch.nn.Module):
         if self.data_name == 'Thumos14reduced':
             self.cma = MCA(n_feature // 2, args['opt'].num_head)
 
-        self.vAttn = BWA_fusion_dropout_feat_v2(1024)
-        self.fAttn = BWA_fusion_dropout_feat_v2(1024)
+        self.vAttn = BWA(1024)
+        self.fAttn = BWA(1024)
 
         self.feat_encoder = nn.Sequential(
             nn.Conv1d(n_feature, embed_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(dropout_ratio))
@@ -109,7 +105,7 @@ class CO2(torch.nn.Module):
         if self.data_name == 'ActivityNet1.2':
             self.cma = MCA(n_feature // 2, args['opt'].num_head)
 
-    def forward(self, inputs, is_training=True, **args):
+    def forward(self, inputs):
         rgb, flow = inputs[:, :, :1024], inputs[:, :, 1024:]
         rgb, flow = self.cma(rgb, flow)
         feat = torch.cat((rgb, flow), dim=-1).transpose(-2, -1)
@@ -143,34 +139,23 @@ class CO2(torch.nn.Module):
         mutual_loss = 0.5 * F.mse_loss(v_atn, f_atn.detach()) + 0.5 * F.mse_loss(f_atn, v_atn.detach())
 
         element_logits_supp = self._multiply(element_logits, element_atn, include_min=True)
-        loss_mil_orig, _ = self.topkloss(element_logits,
-                                         labels,
-                                         is_back=True,
-                                         rat=args['opt'].k,
-                                         reduce=None)
+        loss_mil_orig, _ = self.topkloss(element_logits, labels, is_back=True, rat=args['opt'].k, reduce=None)
         # SAL
-        loss_mil_supp, _ = self.topkloss(element_logits_supp,
-                                         labels,
-                                         is_back=False,
-                                         rat=args['opt'].k,
-                                         reduce=None)
+        loss_mil_supp, _ = self.topkloss(element_logits_supp, labels, is_back=False, rat=args['opt'].k, reduce=None)
 
         loss_3_supp_Contrastive = self.Contrastive(feat, element_logits_supp, labels, is_back=False)
 
         loss_norm = element_atn.mean()
         # guide loss
-        loss_guide = (1 - element_atn -
-                      element_logits.softmax(-1)[..., [-1]]).abs().mean()
+        loss_guide = (1 - element_atn - element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         v_loss_norm = v_atn.mean()
         # guide loss
-        v_loss_guide = (1 - v_atn -
-                        element_logits.softmax(-1)[..., [-1]]).abs().mean()
+        v_loss_guide = (1 - v_atn - element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         f_loss_norm = f_atn.mean()
         # guide loss
-        f_loss_guide = (1 - f_atn -
-                        element_logits.softmax(-1)[..., [-1]]).abs().mean()
+        f_loss_guide = (1 - f_atn - element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         # total loss
         total_loss = (loss_mil_orig.mean() + loss_mil_supp.mean() +
@@ -184,37 +169,25 @@ class CO2(torch.nn.Module):
     def topkloss(self, element_logits, labels, is_back=True, lab_rand=None, rat=8, reduce=None):
 
         if is_back:
-            labels_with_back = torch.cat(
-                (labels, torch.ones_like(labels[:, [0]])), dim=-1)
+            labels_with_back = torch.cat((labels, torch.ones_like(labels[:, [0]])), dim=-1)
         else:
-            labels_with_back = torch.cat(
-                (labels, torch.zeros_like(labels[:, [0]])), dim=-1)
+            labels_with_back = torch.cat((labels, torch.zeros_like(labels[:, [0]])), dim=-1)
         if lab_rand is not None:
             labels_with_back = torch.cat((labels, lab_rand), dim=-1)
 
-        topk_val, topk_ind = torch.topk(
-            element_logits,
-            k=max(1, int(element_logits.shape[-2] // rat)),
-            dim=-2)
-        instance_logits = torch.mean(
-            topk_val,
-            dim=-2,
-        )
-        labels_with_back = labels_with_back / (
-                torch.sum(labels_with_back, dim=1, keepdim=True) + 1e-4)
-        milloss = (-(labels_with_back *
-                     F.log_softmax(instance_logits, dim=-1)).sum(dim=-1))
+        topk_val, topk_ind = torch.topk(element_logits, k=max(1, int(element_logits.shape[-2] // rat)), dim=-2)
+        instance_logits = torch.mean(topk_val, dim=-2)
+        labels_with_back = labels_with_back / (torch.sum(labels_with_back, dim=1, keepdim=True) + 1e-4)
+        milloss = (-(labels_with_back * F.log_softmax(instance_logits, dim=-1)).sum(dim=-1))
         if reduce is not None:
             milloss = milloss.mean()
         return milloss, topk_ind
 
     def Contrastive(self, x, element_logits, labels, is_back=False):
         if is_back:
-            labels = torch.cat(
-                (labels, torch.ones_like(labels[:, [0]])), dim=-1)
+            labels = torch.cat((labels, torch.ones_like(labels[:, [0]])), dim=-1)
         else:
-            labels = torch.cat(
-                (labels, torch.zeros_like(labels[:, [0]])), dim=-1)
+            labels = torch.cat((labels, torch.zeros_like(labels[:, [0]])), dim=-1)
         sim_loss = 0.
         n_tmp = 0.
         _, n, c = element_logits.shape
