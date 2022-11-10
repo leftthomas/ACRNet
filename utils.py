@@ -4,13 +4,12 @@ import numpy as np
 def getAP(conf, labels):
     assert len(conf) == len(labels)
     sortind = np.argsort(-conf)
-    tp = labels[sortind] == 1;
+    tp = labels[sortind] == 1
     fp = labels[sortind] != 1
     npos = np.sum(labels)
 
-    fp = np.cumsum(fp).astype('float32');
+    fp = np.cumsum(fp).astype('float32')
     tp = np.cumsum(tp).astype('float32')
-    rec = tp / npos;
     prec = tp / (fp + tp)
     tmp = (labels[sortind] == 1).astype('float32')
 
@@ -53,7 +52,6 @@ def soft_nms(dets, iou_thr=0.7, method='gaussian', sigma=0.3):
     dets = np.array(dets)
     x1 = dets[:, 2]
     x2 = dets[:, 3]
-    scores = dets[:, 1]
 
     areas = x2 - x1 + 1
 
@@ -88,18 +86,7 @@ def soft_nms(dets, iou_thr=0.7, method='gaussian', sigma=0.3):
     return retained_box
 
 
-def get_proposal_oic_2(tList,
-                       wtcam,
-                       final_score,
-                       c_pred,
-                       scale,
-                       v_len,
-                       sampling_frames,
-                       num_segments,
-                       lambda_=0.25,
-                       gamma=0.2,
-                       loss_type="oic"):
-    t_factor = (16 * v_len) / (scale * num_segments * sampling_frames)
+def get_proposal_oic(tList, wtcam, final_score, c_pred, lambda_=0.25, gamma=0.2, loss_type="oic"):
     temp = []
     for i in range(len(tList)):
         c_temp = []

@@ -9,7 +9,7 @@ args = options.parser.parse_args()
 
 
 def filter_segments(segment_predict, vn):
-    ambilist = './Thumos14reduced-Annotations/Ambiguous_test.txt'
+    ambilist = 'data/Thumos14/Thumos14reduced-Annotations/Ambiguous_test.txt'
     try:
         ambilist = list(open(ambilist, "r"))
         ambilist = [a.strip("\n").split(" ") for a in ambilist]
@@ -17,7 +17,6 @@ def filter_segments(segment_predict, vn):
         ambilist = []
     ind = np.zeros(np.shape(segment_predict)[0])
     for i in range(np.shape(segment_predict)[0]):
-        # s[j], e[j], np.max(seg)+0.7*c_s[c],c]
         for a in ambilist:
             if a[0] == vn:
                 gt = range(
@@ -41,7 +40,7 @@ def get_topk_mean(x, k, axis=0):
     return np.mean(np.sort(x, axis=axis)[-int(k):, :], axis=0)
 
 
-def get_cls_score(element_cls, dim=-2, rat=20, ind=None):
+def get_cls_score(element_cls, rat=20):
     topk_val, _ = torch.topk(element_cls,
                              k=max(1, int(element_cls.shape[-2] // rat)),
                              dim=-2)
@@ -86,15 +85,7 @@ def multiple_threshold_hamnet(vid_name, data_dict):
             pos = np.where(cas_temp_atn[:, 0, 0] > act_thresh[i])
             seg_list.append(pos)
 
-        proposals = utils.get_proposal_oic_2(seg_list,
-                                             cas_temp,
-                                             pred_vid_score,
-                                             pred,
-                                             args.scale,
-                                             num_segments,
-                                             args.feature_fps,
-                                             num_segments,
-                                             gamma=args.gamma_oic)
+        proposals = utils.get_proposal_oic(seg_list, cas_temp, pred_vid_score, pred, gamma=args.gamma_oic)
 
         for j in range(len(proposals)):
             try:

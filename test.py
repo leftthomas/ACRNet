@@ -9,6 +9,7 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+import dataset
 import model
 import options
 import proposal as PM
@@ -88,7 +89,7 @@ def test(itr, dataset, args, model, device):
 if __name__ == '__main__':
     args = options.parser.parse_args()
     device = torch.device("cuda")
-    dataset = getattr(wsad_dataset, args.dataset)(args)
+    dataset = getattr(dataset, args.dataset)(args)
 
     model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
     model.load_state_dict(torch.load('./ckpt/best_' + args.model_name + '.pkl'))

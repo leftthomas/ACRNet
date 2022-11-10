@@ -52,7 +52,7 @@ class ANETdetection(object):
 
     def __init__(
             self,
-            annotation_path='./Thumos14reduced-Annotations',
+            annotation_path,
             tiou_thresholds=np.array([0.1, 0.3, 0.5]),
             args=None,
             subset="test",

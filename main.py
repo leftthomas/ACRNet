@@ -1,7 +1,6 @@
 import multiprocessing as mp
 import os
 import random
-import shutil
 
 import numpy as np
 import torch
@@ -44,10 +43,6 @@ if __name__ == '__main__':
         max_map = [0] * 10
     if not os.path.exists('./ckpt/'):
         os.makedirs('./ckpt/')
-    if not os.path.exists('./logs/' + args.model_name):
-        os.makedirs('./logs/' + args.model_name)
-    if os.path.exists('./logs/' + args.model_name):
-        shutil.rmtree('./logs/' + args.model_name)
     print(args)
     model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
 
