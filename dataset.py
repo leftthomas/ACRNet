@@ -46,12 +46,6 @@ class SampleDataset:
             utils.strlist2multihot(labs, self.classlist)
             for labs in self.labels
         ]
-        try:
-            ambilist = self.path_to_annotations + "Ambiguous_test.txt"
-            ambilist = list(open(ambilist, "r"))
-            ambilist = [a.strip("\n").split(" ")[0] for a in ambilist]
-        except:
-            ambilist = []
         self.train_test_idx()
         self.classwise_feature_mapping()
 
@@ -216,12 +210,6 @@ class AntSampleDataset:
             utils.strlist2multihot(labs, self.classlist)
             for labs in self.labels
         ]
-        try:
-            ambilist = self.path_to_annotations + "Ambiguous_test.txt"
-            ambilist = list(open(ambilist, "r"))
-            ambilist = [a.strip("\n").split(" ")[0] for a in ambilist]
-        except:
-            ambilist = []
         self.train_test_idx()
         self.classwise_feature_mapping()
 

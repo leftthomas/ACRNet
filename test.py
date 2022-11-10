@@ -1,5 +1,4 @@
 import multiprocessing as mp
-import os
 from collections import defaultdict
 
 import numpy as np
@@ -7,7 +6,6 @@ import pandas as pd
 import scipy.io as sio
 import torch
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 import dataset
 import model
@@ -39,7 +37,7 @@ def test(itr, dataset, args, model, device):
             continue
         features = torch.from_numpy(features).float().to(device).unsqueeze(0)
         with torch.no_grad():
-            outputs = model(Variable(features), is_training=False, seq_len=seq_len)
+            outputs = model(features, is_training=False, seq_len=seq_len)
             element_logits = outputs['cas']
             results[vn] = {'cas': outputs['cas'], 'attn': outputs['attn']}
             proposals.append(getattr(PM, args.proposal_method)(vn, outputs))
@@ -50,9 +48,7 @@ def test(itr, dataset, args, model, device):
         instance_logits_stack.append(tmp)
         labels_stack.append(labels)
 
-    if not os.path.exists('temp'):
-        os.mkdir('temp')
-    np.save('temp/{}.npy'.format(args.model_name), results)
+    np.save('result/{}.npy'.format(args.model_name), results)
 
     instance_logits_stack = np.array(instance_logits_stack)
     labels_stack = np.array(labels_stack)
@@ -92,7 +88,7 @@ if __name__ == '__main__':
     dataset = getattr(dataset, args.dataset)(args)
 
     model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
-    model.load_state_dict(torch.load('./ckpt/best_' + args.model_name + '.pkl'))
+    model.load_state_dict(torch.load('result/best_' + args.model_name + '.pkl'))
     pool = mp.Pool(5)
 
     iou, dmap = test(-1, dataset, args, model, device)

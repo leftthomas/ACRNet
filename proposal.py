@@ -56,7 +56,6 @@ def multiple_threshold_hamnet(vid_name, data_dict):
     element_atn = data_dict['attn']
     element_logits = elem * element_atn
     pred_vid_score = get_cls_score(element_logits, rat=10)
-    score_np = pred_vid_score.copy()
     cas_supp = element_logits[..., :-1]
     cas_supp_atn = element_atn
 

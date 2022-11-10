@@ -41,8 +41,6 @@ if __name__ == '__main__':
         max_map = [0] * 9
     else:
         max_map = [0] * 10
-    if not os.path.exists('./ckpt/'):
-        os.makedirs('./ckpt/')
     print(args)
     model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
 
@@ -60,14 +58,14 @@ if __name__ == '__main__':
         if itr % args.interval == 0 and not itr == 0:
             print('Iteration: %d, Loss: %.5f' % (itr, total_loss / args.interval))
             total_loss = 0
-            torch.save(model.state_dict(), './ckpt/last_' + args.model_name + '.pkl')
+            torch.save(model.state_dict(), 'result/last_' + args.model_name + '.pkl')
             iou, dmap = test(itr, dataset, args, model, device)
             if 'Thumos' in args.dataset_name:
                 cond = sum(dmap[:7]) > sum(max_map[:7])
             else:
                 cond = np.mean(dmap) > np.mean(max_map)
             if cond:
-                torch.save(model.state_dict(), './ckpt/best_' + args.model_name + '.pkl')
+                torch.save(model.state_dict(), 'result/best_' + args.model_name + '.pkl')
                 max_map = dmap
 
             print('||'.join(['MAX map @ {} = {:.3f} '.format(iou[i], max_map[i] * 100) for i in range(len(iou))]))

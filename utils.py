@@ -38,7 +38,7 @@ def strlist2multihot(strlist, classlist):
 
 
 def write_to_file(dname, dmap, cmap, itr):
-    fid = open(dname + "-results.log", "a+")
+    fid = open('result/' + dname + "-results.log", "a+")
     string_to_write = str(itr)
     # if dmap:
     for item in dmap:

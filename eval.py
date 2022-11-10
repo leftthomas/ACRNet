@@ -92,7 +92,6 @@ class ANETdetection(object):
         gtsegments = gtsegments[subset_ind]
         gtlabels = gtlabels[subset_ind]
         videoname = videoname[subset_ind]
-        duration = duration[subset_ind]
 
         self.idx_to_take = [i for i, s in enumerate(gtsegments)
                             if len(s) > 0]
@@ -191,12 +190,10 @@ class ANETdetection(object):
             print("\tFixed threshold for tiou score: {}".format(self.tiou_thresholds))
 
         self.ap = self.wrapper_compute_average_precision()
-        # print(self.ap)
         self.mAP = self.ap.mean(axis=1)
         self.average_mAP = self.mAP.mean()
 
         if self.verbose:
-            # print ('[RESULTS] Performance on ActivityNet detection task.')
             for k in range(len(self.tiou_thresholds)):
                 print("Detection map @ %f = %f" % (self.tiou_thresholds[k], self.mAP[k]))
             print("Average-mAP: {}\n".format(self.mAP))
