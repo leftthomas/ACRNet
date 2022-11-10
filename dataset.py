@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-import utils.wsad_utils as utils
+import utils
 
 
 class SampleDataset:

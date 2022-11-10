@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 
 import options
-import utils.wsad_utils as utils
+import utils
 
 args = options.parser.parse_args()
 

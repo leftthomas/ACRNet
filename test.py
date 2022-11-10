@@ -11,11 +11,10 @@ from torch.autograd import Variable
 
 import model
 import options
-import proposal_methods as PM
-import utils.wsad_utils as utils
-import wsad_dataset
-from eval.classificationMAP import getClassificationMAP as cmAP
-from eval.eval_detection import ANETdetection
+import proposal as PM
+import utils
+from eval import ANETdetection
+from utils import getClassificationMAP as cmAP
 
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
 

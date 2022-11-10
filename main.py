@@ -7,9 +7,9 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
+import dataset
 import model
 import options
-import wsad_dataset
 from test import test
 from train import train
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     print('=============seed: {}, pid: {}============='.format(seed, os.getpid()))
     setup_seed(seed)
     device = torch.device("cuda")
-    dataset = getattr(wsad_dataset, args.dataset)(args)
+    dataset = getattr(dataset, args.dataset)(args)
     if 'Thumos' in args.dataset_name:
         max_map = [0] * 9
     else:
