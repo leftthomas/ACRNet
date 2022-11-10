@@ -130,15 +130,6 @@ class ANETdetection(object):
         self.ground_truth = ground_truth
         self.activity_index = {i: templabelidx[i] for i in range(len(templabelidx))}
 
-    def get_topk_mean(self, x, k, axis=0):
-        return np.mean(np.sort(x, axis=axis)[-int(k):, :], axis=0)
-
-    def _get_att_topk_mean(self, p, att_logits, k):
-        args_topk = np.argsort(att_logits, axis=0)[-k:]
-        topk_mean = 1 / (1 + np.exp(-np.mean(att_logits[args_topk], axis=0))) * 1 / (
-                1 + np.exp(-np.mean(p[args_topk], axis=0)))
-        return topk_mean
-
     def _get_predictions_with_label(self, prediction_by_label, label_name, cidx):
         """Get all predicitons of the given label. Return empty DataFrame if there
         is no predcitions with the given label.

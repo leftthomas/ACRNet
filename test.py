@@ -7,10 +7,10 @@ import scipy.io as sio
 import torch
 import torch.nn.functional as F
 
-import dataset
 import options
 import proposal as PM
 import utils
+from dataset import SampleDataset
 from eval import ANETdetection
 from model import CO2
 from utils import getClassificationMAP as cmAP
@@ -85,7 +85,7 @@ def test(itr, dataset, args, model, device):
 if __name__ == '__main__':
     args = options.parser.parse_args()
     device = torch.device("cuda")
-    dataset = dataset.SampleDataset(args)
+    dataset = SampleDataset(args)
 
     model = CO2(dataset.feature_size, dataset.num_class, opt=args).to(device)
     model.load_state_dict(torch.load('result/best_' + args.model_name + '.pkl'))

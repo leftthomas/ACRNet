@@ -132,7 +132,7 @@ class SampleDataset:
             for i in idx:
                 ifeat = self.features[i]
                 if self.sampling == 'random':
-                    sample_idx = self.random_perturb(ifeat.shape[0])
+                    sample_idx = self.random_sampling(ifeat.shape[0])
                 elif self.sampling == 'uniform':
                     sample_idx = self.uniform_sampling(ifeat.shape[0])
                 elif self.sampling == "all":
@@ -166,29 +166,18 @@ class SampleDataset:
                 feat = feat[..., self.feature_size:]
             return feat, np.array(labs), vn, done
 
-    def random_perturb(self, length):
-        if self.num_segments == length:
-            return np.arange(self.num_segments).astype(int)
-        samples = np.arange(self.num_segments) * length / self.num_segments
+    def random_sampling(self, num_seg):
+        sample_idx = np.append(np.arange(self.num_segments) * num_seg / self.num_segments, num_seg)
         for i in range(self.num_segments):
-            if i < self.num_segments - 1:
-                if int(samples[i]) != int(samples[i + 1]):
-                    samples[i] = np.random.choice(
-                        range(int(samples[i]),
-                              int(samples[i + 1]) + 1))
-                else:
-                    samples[i] = int(samples[i])
+            if int(sample_idx[i]) == int(sample_idx[i + 1]):
+                sample_idx[i] = int(sample_idx[i])
             else:
-                if int(samples[i]) < length - 1:
-                    samples[i] = np.random.choice(
-                        range(int(samples[i]), length))
-                else:
-                    samples[i] = int(samples[i])
-        return samples.astype(int)
+                sample_idx[i] = np.random.randint(int(sample_idx[i]), int(sample_idx[i + 1]))
+        return sample_idx[:-1].astype(np.int)
 
     def uniform_sampling(self, length):
-        if self.num_segments == length:
-            return np.arange(self.num_segments).astype(int)
-        samples = np.arange(self.num_segments) * length / self.num_segments
-        samples = np.floor(samples)
-        return samples.astype(int)
+        # because the length may different as these two line codes, make sure batch size == 1 in test mode
+        if length <= self.num_segments:
+            return np.arange(length).astype(np.int)
+        else:
+            return np.floor(np.arange(self.num_segments) * length / self.num_segments).astype(np.int)
