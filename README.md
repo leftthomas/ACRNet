@@ -1,9 +1,9 @@
-# ACRNet
+# RelationNet
 
-A PyTorch implementation of ACRNet based on ICME 2023 paper
-[Weakly-supervised Temporal Action Localization with Adaptive Clustering and Refining Network]().
+A PyTorch implementation of RelationNet based on CVPR 2023 paper
+[Mining Relations for Weakly-Supervised Action Localization]().
 
-![Network Architecture](result/model.png)
+![Network Architecture](result/structure.png)
 
 ## Requirements
 
@@ -64,15 +64,13 @@ You can easily train and test the model by running the script below. If you want
 ### Train Model
 
 ```
-python main.py --max-seqlen 500 --lr 0.00005 --k 7 --dataset-name Thumos14reduced --path-dataset path/to/Thumos14 --num-class 20 --max-iter 5000 --weight_decay 0.001 --model-name CO2_3552
-python main.py --k 5 --dataset-name ActivityNet1.2 --path-dataset path/to/ActivityNet1.2 --num-class 100 --lr 3e-5 --max-seqlen 60 --model-name ANT_CO2_3552 --max-iter 22000
+python main.py --data_name activitynet1.2 --num_segments 50 --seed 1
 ```
 
 ### Test Model
 
 ```
-python test.py --dataset-name Thumos14reduced --num-class 20 --path-dataset path/to/Thumos14 --model-name CO2_3552
-python test.py --dataset-name ActivityNet1.2 --num-class 100 --path-dataset path/to/ActivityNet1.2 --model-name ANT_CO2_3552 --max-seqlen 60
+python main.py --data_name thumos14 --model_file result/thumos14.pth
 ```
 
 ## Benchmarks

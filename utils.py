@@ -1,132 +1,187 @@
+import argparse
+import os
+import random
+import subprocess
+
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
+import torch
+from scipy.interpolate import interp1d
+from torch.backends import cudnn
 
 
-def getAP(conf, labels):
-    assert len(conf) == len(labels)
-    sortind = np.argsort(-conf)
-    tp = labels[sortind] == 1
-    fp = labels[sortind] != 1
-    npos = np.sum(labels)
+def parse_args():
+    desc = 'Pytorch Implementation of \'Mining Relations for Weakly-Supervised Action Localization\''
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('--data_path', type=str, default='/home/data')
+    parser.add_argument('--save_path', type=str, default='result')
+    parser.add_argument('--data_name', type=str, default='thumos14',
+                        choices=['thumos14', 'activitynet1.2', 'activitynet1.3'])
+    parser.add_argument('--cls_th', type=float, default=0.1, help='threshold for action classification')
+    parser.add_argument('--iou_th', type=float, default=0.1, help='threshold for NMS IoU')
+    parser.add_argument('--act_th', type=str, default='np.arange(0.1, 1.0, 0.05)',
+                        help='threshold for candidate frames')
+    parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
+    parser.add_argument('--fps', type=int, default=25, help='fps for each video')
+    parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
+    parser.add_argument('--num_iter', type=int, default=2000, help='iterations of training')
+    parser.add_argument('--eval_iter', type=int, default=100, help='iterations of evaluating')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size of loading videos for training')
+    parser.add_argument('--init_lr', type=float, default=1e-4, help='initial learning rate')
+    parser.add_argument('--weight_decay', type=float, default=1e-3, help='weight decay for optimizer')
+    parser.add_argument('--alpha', type=float, default=0.1, help='loss weight for aas loss')
+    parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
+    parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
+    parser.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
+    parser.add_argument('--save_vis', action='store_true', default=False,
+                        help='save class activation sequence or not')
 
-    fp = np.cumsum(fp).astype('float32')
-    tp = np.cumsum(tp).astype('float32')
-    prec = tp / (fp + tp)
-    tmp = (labels[sortind] == 1).astype('float32')
-
-    return np.sum(tmp * prec) / npos
-
-
-def getClassificationMAP(confidence, labels):
-    ''' confidence and labels are of dimension n_samples x n_label '''
-
-    AP = []
-    for i in range(np.shape(labels)[1]):
-        AP.append(getAP(confidence[:, i], labels[:, i]))
-    return 100 * sum(AP) / len(AP)
-
-
-def str2ind(categoryname, classlist):
-    return [i for i in range(len(classlist)) if categoryname == classlist[i].decode("utf-8")][0]
-
-
-def strlist2indlist(strlist, classlist):
-    return [str2ind(s, classlist) for s in strlist]
+    return init_args(parser.parse_args())
 
 
-def strlist2multihot(strlist, classlist):
-    return np.sum(np.eye(len(classlist))[strlist2indlist(strlist, classlist)], axis=0)
+class Config(object):
+    def __init__(self, args):
+        self.data_path = args.data_path
+        self.save_path = args.save_path
+        self.data_name = args.data_name
+        self.cls_th = args.cls_th
+        self.iou_th = args.iou_th
+        self.act_th = eval(args.act_th)
+        self.map_th = args.map_th
+        self.num_seg = args.num_seg
+        self.fps = args.fps
+        self.rate = args.rate
+        self.num_iter = args.num_iter
+        self.eval_iter = args.eval_iter
+        self.batch_size = args.batch_size
+        self.init_lr = args.init_lr
+        self.weight_decay = args.weight_decay
+        self.alpha = args.alpha
+        self.workers = args.workers
+        self.model_file = args.model_file
+        self.save_vis = args.save_vis
 
 
-def write_to_file(dname, dmap, cmap, itr):
-    fid = open('result/' + dname + "-results.log", "a+")
-    string_to_write = str(itr)
-    # if dmap:
-    for item in dmap:
-        string_to_write += " " + "%.2f" % item
-    string_to_write += " " + "%.2f" % cmap
-    fid.write(string_to_write + "\n")
-    fid.close()
+def init_args(args):
+    if not os.path.exists(args.save_path):
+        os.makedirs(args.save_path)
+
+    if args.seed >= 0:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
+        cudnn.deterministic = True
+        cudnn.benchmark = False
+
+    args.map_th = np.linspace(0.1, 0.7, 7) if args.data_name == 'thumos14' else np.linspace(0.5, 0.95, 10)
+    return Config(args)
 
 
-def soft_nms(dets, iou_thr=0.7, method='gaussian', sigma=0.3):
-    dets = np.array(dets)
-    x1 = dets[:, 2]
-    x2 = dets[:, 3]
-
-    areas = x2 - x1 + 1
-
-    # expand dets with areas, and the second dimension is
-    # x1, x2, score, area
-    dets = np.concatenate((dets, areas[:, None]), axis=1)
-
-    retained_box = []
-    while dets.size > 0:
-        max_idx = np.argmax(dets[:, 1], axis=0)
-        dets[[0, max_idx], :] = dets[[max_idx, 0], :]
-        retained_box.append(dets[0, :-1].tolist())
-
-        xx1 = np.maximum(dets[0, 2], dets[1:, 2])
-        xx2 = np.minimum(dets[0, 3], dets[1:, 3])
-
-        inter = np.maximum(xx2 - xx1 + 1, 0.0)
-        iou = inter / (dets[0, -1] + dets[1:, -1] - inter)
-
-        if method == 'linear':
-            weight = np.ones_like(iou)
-            weight[iou > iou_thr] -= iou[iou > iou_thr]
-        elif method == 'gaussian':
-            weight = np.exp(-(iou * iou) / sigma)
-        else:  # traditional nms
-            weight = np.ones_like(iou)
-            weight[iou > iou_thr] = 0
-
-        dets[1:, 1] *= weight
-        dets = dets[1:, :]
-
-    return retained_box
+# change the segment based scores to frame based scores
+def revert_frame(scores, num_frame):
+    x = np.arange(scores.shape[0])
+    f = interp1d(x, scores, kind='linear', axis=0, fill_value='extrapolate')
+    scale = np.arange(num_frame) * scores.shape[0] / num_frame
+    return f(scale)
 
 
-def get_proposal_oic(tList, wtcam, final_score, c_pred, lambda_=0.25, gamma=0.2, loss_type="oic"):
-    temp = []
-    for i in range(len(tList)):
-        c_temp = []
-        temp_list = np.array(tList[i])[0]
-        if temp_list.any():
-            grouped_temp_list = grouping(temp_list)
-            for j in range(len(grouped_temp_list)):
-                inner_score = np.mean(wtcam[grouped_temp_list[j], i, 0])
-
-                len_proposal = len(grouped_temp_list[j])
-                outer_s = max(
-                    0, int(grouped_temp_list[j][0] - lambda_ * len_proposal))
-                outer_e = min(
-                    int(wtcam.shape[0] - 1),
-                    int(grouped_temp_list[j][-1] + lambda_ * len_proposal),
-                )
-
-                outer_temp_list = list(
-                    range(outer_s, int(grouped_temp_list[j][0]))) + list(
-                    range(int(grouped_temp_list[j][-1] + 1), outer_e + 1))
-
-                if len(outer_temp_list) == 0:
-                    outer_score = 0
-                else:
-                    outer_score = np.mean(wtcam[outer_temp_list, i, 0])
-
-                if loss_type == "oic":
-                    c_score = inner_score - outer_score + gamma * final_score[
-                        c_pred[i]]
-                else:
-                    c_score = inner_score
-                t_start = grouped_temp_list[j][0]
-                t_end = (grouped_temp_list[j][-1] + 1)
-                c_temp.append([c_pred[i], c_score, t_start, t_end])
-            temp.append(c_temp)
-    return temp
+# split frames to action regions
+def grouping(frames):
+    return np.split(frames, np.where(np.diff(frames) != 1)[0] + 1)
 
 
-def grouping(arr):
-    return np.split(arr, np.where(np.diff(arr) != 1)[0] + 1)
+def result2json(result, class_dict):
+    result_file = []
+    for key, value in result.items():
+        for line in value:
+            result_file.append({'label': class_dict[key], 'score': float(line[-1]),
+                                'segment': [float(line[0]), float(line[1])]})
+    return result_file
 
 
+def which_ffmpeg():
+    result = subprocess.run(['which', 'ffmpeg'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return result.stdout.decode('utf-8').replace('\n', '')
 
+
+# ref: Dual-Evidential Learning for Weakly-supervised Temporal Action Localization (ECCV 2022)
+def filter_results(results, ambi_file):
+    ambi_list = [line.strip('\n').split(' ') for line in list(open(ambi_file, 'r'))]
+    for key, value in results['results'].items():
+        for filter_item in ambi_list:
+            if filter_item[0] == key:
+                filtered = []
+                for item in value:
+                    if float(filter_item[2]) <= item['segment'][0] <= float(filter_item[3]):
+                        continue
+                    else:
+                        filtered.append(item)
+                results['results'][key] = filtered
+    return results
+
+
+# ref: Completeness Modeling and Context Separation for Weakly Supervised Temporal Action Localization (CVPR 2019)
+def oic_score(frame_scores, act_score, proposal, _lambda=0.25, gamma=0.2):
+    inner_score = np.mean(frame_scores[proposal])
+    outer_s = max(0, int(proposal[0] - _lambda * len(proposal)))
+    outer_e = min(int(frame_scores.shape[0] - 1), int(proposal[-1] + _lambda * len(proposal)))
+    outer_temp_list = list(range(outer_s, int(proposal[0]))) + list(range(int(proposal[-1] + 1), outer_e + 1))
+
+    if len(outer_temp_list) == 0:
+        outer_score = 0.0
+    else:
+        outer_score = np.mean(frame_scores[outer_temp_list])
+    score = inner_score - outer_score + gamma * act_score
+    return score
+
+
+def draw_pred(frame_scores, proposal_dict, dataset, video_name, fps, save_path):
+    gt_dicts, idx_to_class, class_to_idx = dataset.annotations, dataset.idx_to_class, dataset.class_to_idx
+    data_name = dataset.data_name
+
+    frame_indexes = np.arange(0, frame_scores.shape[0])
+    color_palette = sns.color_palette('deep', n_colors=len(idx_to_class))
+
+    fig, axs = plt.subplots(3, 1, figsize=(7, 3))
+
+    gt_list = gt_dicts['d_{}'.format(video_name)]['annotations']
+    for gt in gt_list:
+        start, end = gt['segment']
+        label = gt['label']
+        # change second to frame index
+        start, end = int(start * fps - 1), int(end * fps - 2)
+        count = np.zeros(frame_scores.shape[0])
+        count[start:end] = 1
+        axs[0].fill_between(frame_indexes, count, color=color_palette[class_to_idx[label]], label=label)
+    axs[0].set_ylabel('GT')
+
+    for class_id, proposal_list in proposal_dict.items():
+        axs[2].plot(frame_indexes, frame_scores[:, class_id], color=color_palette[class_id],
+                    label=idx_to_class[class_id])
+        for proposal in proposal_list:
+            # change second to frame index
+            start, end = int(proposal[0] * fps - 1), int(proposal[1] * fps - 2)
+            count = np.zeros(frame_scores.shape[0])
+            count[start:end] = 1
+            axs[1].fill_between(frame_indexes, count, color=color_palette[class_id], label=idx_to_class[class_id])
+    axs[1].set_ylabel('Pred')
+    axs[2].set_ylabel('CAS')
+
+    plt.setp(axs, xticks=[], yticks=[], xlim=(0, frame_scores.shape[0]), ylim=(0, 1))
+    lines, labels = [], []
+    for ax in axs:
+        ax_lines, ax_labels = ax.get_legend_handles_labels()
+        for line, label in zip(ax_lines, ax_labels):
+            if label not in labels:
+                lines.append(line)
+                labels.append(label)
+    fig.legend(lines, labels, loc=2, bbox_to_anchor=(0.91, 0.9))
+
+    save_name = '{}/{}/{}.pdf'.format(save_path, data_name, video_name)
+    if not os.path.exists(os.path.dirname(save_name)):
+        os.makedirs(os.path.dirname(save_name))
+    plt.savefig(save_name, bbox_inches='tight')
+    plt.cla()
+    plt.close('all')
