@@ -26,6 +26,9 @@ def test_loop(net, data_loader, num_iter):
             act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
 
             pred = torch.ge(act_score, args.cls_th)
+            # ref: Cross-modal Consensus Network for Weakly Supervised Temporal Action Localization (ACM MM 2021)
+            if torch.sum(pred) == 0:
+                pred[torch.argmax(act_score, dim=-1)] = True
             num_correct += 1 if torch.equal(gt, pred.float()) else 0
             num_total += 1
 
