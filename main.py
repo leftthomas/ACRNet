@@ -20,7 +20,8 @@ def test_loop(net, data_loader, num_iter):
     results, num_correct, num_total, test_info = {'results': {}}, 0, 0, {}
     with torch.no_grad():
         for data, gt, video_name, num_seg in tqdm(data_loader, initial=1, dynamic_ncols=True):
-            data, gt, video_name, num_seg = data.cuda(), gt.squeeze(0).cuda(), video_name[0], num_seg.squeeze(0)
+            data, gt = data.cuda(non_blocking=True), gt.squeeze(0).cuda(non_blocking=True)
+            video_name, num_seg = video_name[0], num_seg.squeeze(0)
             act_score, _, seg_score, _, _, _ = net(data)
             # [C],  [T, C]
             act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
@@ -107,7 +108,7 @@ def save_loop(net, data_loader, num_iter):
 if __name__ == '__main__':
     args = parse_args()
     test_data = VideoDataset(args.data_path, args.data_name, 'test', args.num_seg)
-    test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers)
+    test_loader = DataLoader(test_data, 1, False, num_workers=args.workers, pin_memory=True)
 
     model = Model(len(test_data.class_to_idx)).cuda()
     best_mAP, metric_info = 0, {}
@@ -119,7 +120,7 @@ if __name__ == '__main__':
         model.train()
         train_data = VideoDataset(args.data_path, args.data_name, 'train', args.num_seg,
                                   args.batch_size * args.num_iter)
-        train_loader = iter(DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers))
+        train_loader = iter(DataLoader(train_data, args.batch_size, True, num_workers=args.workers, pin_memory=True))
         optimizer = Adam(model.parameters(), lr=args.init_lr, weight_decay=args.weight_decay)
         lr_scheduler = CosineAnnealingLR(optimizer, T_max=args.num_iter)
 
@@ -127,7 +128,7 @@ if __name__ == '__main__':
         train_bar = tqdm(range(1, args.num_iter + 1), initial=1, dynamic_ncols=True)
         for step in train_bar:
             feat, label, _, _ = next(train_loader)
-            feat, label = feat.cuda(), label.cuda()
+            feat, label = feat.cuda(non_blocking=True), label.cuda(non_blocking=True)
             act_score, bkg_score, seg_score, seg_mask, aas_rgb, aas_flow = model(feat)
             cas_loss = cross_entropy(act_score, bkg_score, label)
             aas_rgb_loss = generalized_cross_entropy(aas_rgb, seg_mask, label)

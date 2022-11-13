@@ -28,19 +28,21 @@ class VideoDataset(Dataset):
             annotations = json.load(f)
 
         # prepare data
-        self.rgb, self.flow, self.annotations, classes, self.class_to_idx, self.idx_to_class = [], [], {}, set(), {}, {}
+        self.rgb, self.flow, self.annotations, classes = [], [], {}, set()
+        self.names, self.labels, self.class_to_idx, self.idx_to_class = [], [], {}, {}
         for key, value in annotations.items():
             if value['subset'] == data_type:
                 # ref: Weakly-supervised Temporal Action Localization by Uncertainty Modeling (AAAI 2021)
                 if key in ['video_test_0000270', 'video_test_0001292', 'video_test_0001496']:
                     continue
-                rgb_path = '{}/{}/features/{}/{}_rgb.npy'.format(data_path, data_name, data_type, key)
-                flow_path = '{}/{}/features/{}/{}_flow.npy'.format(data_path, data_name, data_type, key)
+                rgb = np.load('{}/{}/features/{}/{}_rgb.npy'.format(data_path, data_name, data_type, key))
+                flow = np.load('{}/{}/features/{}/{}_flow.npy'.format(data_path, data_name, data_type, key))
                 # ref: Cross-modal Consensus Network for Weakly Supervised Temporal Action Localization (ACM MM 2021)
-                if len(np.load(rgb_path)) <= 10:
+                if len(rgb) <= 10:
                     continue
-                self.rgb.append(rgb_path)
-                self.flow.append(flow_path)
+                self.rgb.append(rgb)
+                self.flow.append(flow)
+                self.names.append(key)
                 # the prefix is added to compatible with ActivityNetLocalization class
                 self.annotations['d_{}'.format(key)] = {'annotations': value['annotations']}
                 for annotation in value['annotations']:
@@ -48,6 +50,12 @@ class VideoDataset(Dataset):
         for i, key in enumerate(sorted(classes)):
             self.class_to_idx[key] = i
             self.idx_to_class[i] = key
+        for i in range(len(self.rgb)):
+            label = np.zeros(len(classes), dtype=np.float32)
+            for item in annotations[self.names[i]]['annotations']:
+                label[self.class_to_idx[item['label']]] = 1
+            self.labels.append(label)
+
         # for train according to the given length, for test according to the real length
         self.num = len(self.rgb)
         self.sample_num = length if self.data_type == 'train' else self.num
@@ -56,16 +64,11 @@ class VideoDataset(Dataset):
         return self.sample_num
 
     def __getitem__(self, index):
-        rgb, flow = np.load(self.rgb[index % self.num]), np.load(self.flow[index % self.num])
-        video_key, num_seg = os.path.basename(self.rgb[index % self.num]).split('.')[0][: -4], rgb.shape[0]
-        annotation = self.annotations['d_{}'.format(video_key)]
+        rgb, flow = self.rgb[index % self.num], self.flow[index % self.num]
+        video_key, label, num_seg = self.names[index % self.num], self.labels[index % self.num], len(rgb)
         sample_idx = self.random_sampling(num_seg) if self.data_type == 'train' else self.uniform_sampling(num_seg)
         rgb, flow = torch.from_numpy(rgb[sample_idx]), torch.from_numpy(flow[sample_idx])
-
-        label = torch.zeros(len(self.class_to_idx))
-        for item in annotation['annotations']:
-            label[self.class_to_idx[item['label']]] = 1
-        feat = torch.cat((rgb, flow), dim=-1)
+        feat, label = torch.cat((rgb, flow), dim=-1), torch.from_numpy(label)
         return feat, label, video_key, num_seg
 
     def random_sampling(self, num_seg):
