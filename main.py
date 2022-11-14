@@ -55,7 +55,7 @@ def test_loop(net, data_loader, num_iter):
                     # temporal soft nms
                     # ref: BSN: Boundary Sensitive Network for Temporal Action Proposal Generation (ECCV 2018)
                     if i in proposal_dict:
-                        proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.75, low_threshold=args.iou_th,
+                        proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.6, low_threshold=args.iou_th,
                                                     high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
             if args.save_vis:
                 # draw the pred to vis
