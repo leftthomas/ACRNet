@@ -203,8 +203,8 @@ def calculate_score(seg_score, seg_mask, cas):
 
 def cross_entropy(act_score, bkg_score, label, eps=1e-8):
     act_num = torch.clamp_min(torch.sum(label, dim=-1), 1.0)
-    act_loss = (-(label * torch.log(act_score + eps)).sum(dim=-1) / act_num).mean(dim=0)
-    bkg_loss = (-torch.log(1.0 - bkg_score + eps)).mean()
+    act_loss = (-(label * torch.log(torch.clamp_min(act_score, eps))).sum(dim=-1) / act_num).mean()
+    bkg_loss = (-torch.log(torch.clamp_min(1.0 - bkg_score, eps))).mean()
     return act_loss + bkg_loss
 
 
@@ -223,6 +223,6 @@ def generalized_cross_entropy(aas_score, seg_mask, label, q=0.7, eps=1e-8):
     pos_num = torch.clamp_min(torch.sum(mask, dim=1), 1.0)
     neg_num = torch.clamp_min(torch.sum(1.0 - mask, dim=1), 1.0)
 
-    pos_loss = ((((1.0 - (aas_score + eps) ** q) / q) * mask).sum(dim=-1) / pos_num).mean(dim=0)
-    neg_loss = ((((1.0 - (1.0 - aas_score + eps) ** q) / q) * (1.0 - mask)).sum(dim=-1) / neg_num).mean(dim=0)
+    pos_loss = ((((1.0 - torch.clamp_min(aas_score, eps) ** q) / q) * mask).sum(dim=-1) / pos_num).mean()
+    neg_loss = ((((1.0 - torch.clamp_min(1.0 - aas_score, eps) ** q) / q) * (1.0 - mask)).sum(dim=-1) / neg_num).mean()
     return pos_loss + neg_loss
