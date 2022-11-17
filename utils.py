@@ -117,7 +117,7 @@ def filter_results(results, ambi_file):
             if filter_item[0] == key:
                 filtered = []
                 for item in value:
-                    if float(filter_item[2]) <= item['segment'][0] <= float(filter_item[3]):
+                    if max(float(filter_item[2]), item['segment'][0]) < min(float(filter_item[3]), item['segment'][1]):
                         continue
                     else:
                         filtered.append(item)
