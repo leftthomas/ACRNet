@@ -1,9 +1,9 @@
-# RelationNet
+# ACRNet
 
-A PyTorch implementation of RelationNet based on CVPR 2023 paper
-[Mining Relations for Weakly-Supervised Action Localization]().
+A PyTorch implementation of ACRNet based on ICME 2023 paper
+[Weakly-supervised Temporal Action Localization with Adaptive Clustering and Refining Network]().
 
-![Network Architecture](result/structure.png)
+![Network Architecture](result/model.png)
 
 ## Requirements
 
@@ -11,7 +11,7 @@ A PyTorch implementation of RelationNet based on CVPR 2023 paper
 - [PyTorch](https://pytorch.org)
 
 ```
-conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
+conda install pytorch torchvision torchaudio pytorch-cuda=11.6 -c pytorch -c nvidia
 ```
 
 - [MMAction2](https://mmaction2.readthedocs.io)
@@ -25,7 +25,7 @@ mim install mmaction2 -f https://github.com/open-mmlab/mmaction2.git
 
 [THUMOS 14](http://crcv.ucf.edu/THUMOS14/download.html) and [ActivityNet](http://activity-net.org/download.html)
 datasets are used in this repo, you should download these datasets from official websites. The RGB and Flow features of
-these datasets are extracted by `dataset.py` with `25 FPS`. You should follow
+these datasets are extracted by [dataset.py](dataset.py) with `25 FPS`. You should follow
 [this link](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7) to install OpenCV4 with CUDA. And then
 compile [denseFlow_GPU](https://github.com/daveboat/denseFlow_GPU), put the executable program in this dir. The options
 could be found in [dataset.py](dataset.py), this script will take a lot of time to extract the features. Finally, I3D
@@ -64,7 +64,7 @@ You can easily train and test the model by running the script below. If you want
 ### Train Model
 
 ```
-python main.py --data_name activitynet1.2 --num_segments 50 --seed 1
+python main.py --data_name activitynet1.2 --num_segments 80 --seed 42
 ```
 
 ### Test Model
@@ -75,7 +75,9 @@ python main.py --data_name thumos14 --model_file result/thumos14.pth
 
 ## Benchmarks
 
-The models are trained on one NVIDIA GeForce RTX 3090 GPU (24G). All the hyper-parameters are the default values.
+The models are trained on one NVIDIA GeForce RTX 3090 GPU (24G). `seed` is `42` for all datasets, `num_seg` is `80`,
+`alpha` is `0.8` and `batch_size` is `128` for both `activitynet1.2&1.3` datasets, the other hyper-parameters are the
+default values.
 
 ### THUMOS14
 
@@ -99,15 +101,15 @@ The models are trained on one NVIDIA GeForce RTX 3090 GPU (24G). All the hyper-p
 </thead>
 <tbody>
   <tr>
-    <td align="center">RelationNet</td>
-    <td align="center">60.3</td>
-    <td align="center">54.3</td>
-    <td align="center">45.7</td>
-    <td align="center">37.2</td>
-    <td align="center">27.8</td>
-    <td align="center">18.2</td>
-    <td align="center">9.2</td>
-    <td align="center">36.1</td>
+    <td align="center">ACRNet</td>
+    <td align="center">75.4</td>
+    <td align="center">69.4</td>
+    <td align="center">60.0</td>
+    <td align="center">48.2</td>
+    <td align="center">36.4</td>
+    <td align="center">24.1</td>
+    <td align="center">13.1</td>
+    <td align="center">46.7</td>
     <td align="center"><a href="https://pan.baidu.com/s/1mv-RHb9VNu2FYBdzjNehPA">MEGA</a></td>
   </tr>
 </tbody>
@@ -138,15 +140,15 @@ mAP@AVG is the average mAP under the thresholds 0.1:0.1:0.7.
 </thead>
 <tbody>
   <tr>
-    <td align="center">RelationNet</td>
+    <td align="center">ACRNet</td>
     <td align="center">41.2</td>
     <td align="center">25.6</td>
     <td align="center">6.0</td>
-    <td align="center">25.9</td>
+    <td align="center">28.4</td>
     <td align="center">37.0</td>
     <td align="center">23.9</td>
     <td align="center">5.7</td>
-    <td align="center">23.7</td>
+    <td align="center">25.7</td>
     <td align="center"><a href="https://pan.baidu.com/s/11_7eu29IQ50rBU2W-dFceg">MEGA</a></td>
   </tr>
 </tbody>

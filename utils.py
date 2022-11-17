@@ -12,7 +12,8 @@ from torch.backends import cudnn
 
 
 def parse_args():
-    desc = 'Pytorch Implementation of \'Mining Relations for Weakly-Supervised Action Localization\''
+    desc = 'Pytorch Implementation of \'Weakly-supervised Temporal Action Localization with Adaptive ' \
+           'Clustering and Refining Network\''
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('--data_path', type=str, default='/home/data')
     parser.add_argument('--save_path', type=str, default='result')
@@ -22,6 +23,7 @@ def parse_args():
     parser.add_argument('--iou_th', type=float, default=0.1, help='threshold for NMS IoU')
     parser.add_argument('--act_th', type=str, default='np.arange(0.1, 1.0, 0.05)',
                         help='threshold for candidate frames')
+    parser.add_argument('--alpha', type=float, default=0.5, help='alpha value for soft nms')
     parser.add_argument('--num_seg', type=int, default=750, help='sampled segments for each video')
     parser.add_argument('--fps', type=int, default=25, help='fps for each video')
     parser.add_argument('--rate', type=int, default=16, help='number of frames in each segment')
@@ -30,7 +32,7 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of loading videos for training')
     parser.add_argument('--init_lr', type=float, default=1e-4, help='initial learning rate')
     parser.add_argument('--weight_decay', type=float, default=1e-3, help='weight decay for optimizer')
-    parser.add_argument('--alpha', type=float, default=0.1, help='loss weight for aas loss')
+    parser.add_argument('--lamda', type=float, default=0.1, help='loss weight for aas loss')
     parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=-1, help='random seed (-1 for no manual seed)')
     parser.add_argument('--model_file', type=str, default=None, help='the path of pre-trained model file')
@@ -49,6 +51,7 @@ class Config(object):
         self.iou_th = args.iou_th
         self.act_th = eval(args.act_th)
         self.map_th = args.map_th
+        self.alpha = args.alpha
         self.num_seg = args.num_seg
         self.fps = args.fps
         self.rate = args.rate
@@ -57,7 +60,7 @@ class Config(object):
         self.batch_size = args.batch_size
         self.init_lr = args.init_lr
         self.weight_decay = args.weight_decay
-        self.alpha = args.alpha
+        self.lamda = args.lamda
         self.workers = args.workers
         self.model_file = args.model_file
         self.save_vis = args.save_vis
@@ -106,7 +109,7 @@ def which_ffmpeg():
     return result.stdout.decode('utf-8').replace('\n', '')
 
 
-# ref: Dual-Evidential Learning for Weakly-supervised Temporal Action Localization (ECCV 2022)
+# ref: D2-Net: Weakly-Supervised Action Localization via Discriminative Embeddings and Denoised Activations (ICCV 2021)
 def filter_results(results, ambi_file):
     ambi_list = [line.strip('\n').split(' ') for line in list(open(ambi_file, 'r'))]
     for key, value in results['results'].items():

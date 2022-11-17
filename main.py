@@ -27,7 +27,7 @@ def test_loop(net, data_loader, num_iter):
             act_score, seg_score = act_score.squeeze(0), seg_score.squeeze(0)
 
             pred = torch.ge(act_score, args.cls_th)
-            # ref: Cross-modal Consensus Network for Weakly Supervised Temporal Action Localization (ACM MM 2021)
+            # make sure at least one prediction
             if torch.sum(pred) == 0:
                 pred[torch.argmax(act_score, dim=-1)] = True
             num_correct += 1 if torch.equal(gt, pred.float()) else 0
@@ -55,8 +55,8 @@ def test_loop(net, data_loader, num_iter):
                     # temporal soft nms
                     # ref: BSN: Boundary Sensitive Network for Temporal Action Proposal Generation (ECCV 2018)
                     if i in proposal_dict:
-                        proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), alpha=0.5, low_threshold=args.iou_th,
-                                                    high_threshold=args.iou_th, top_k=len(proposal_dict[i])).tolist()
+                        proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), args.alpha, args.iou_th, args.iou_th,
+                                                    top_k=len(proposal_dict[i])).tolist()
             if args.save_vis:
                 # draw the pred to vis
                 draw_pred(frame_score, proposal_dict, data_loader.dataset, video_name, args.fps, args.save_path)
@@ -133,7 +133,7 @@ if __name__ == '__main__':
             cas_loss = cross_entropy(act_score, bkg_score, label)
             aas_rgb_loss = generalized_cross_entropy(aas_rgb, seg_mask, label)
             aas_flow_loss = generalized_cross_entropy(aas_flow, seg_mask, label)
-            loss = cas_loss + args.alpha * (aas_rgb_loss + aas_flow_loss)
+            loss = cas_loss + args.lamda * (aas_rgb_loss + aas_flow_loss)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

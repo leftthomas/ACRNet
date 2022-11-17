@@ -47,7 +47,7 @@ class MCA(nn.Module):
         return f_rgb, f_flow
 
 
-# ref: Cross-modal Consensus Network for Weakly Supervised Temporal Action Localization (ACM MM 2021)
+# ref: Dual-Evidential Learning for Weakly-supervised Temporal Action Localization (ECCV 2022)
 class BWA(nn.Module):
     def __init__(self, feat_dim):
         super(BWA, self).__init__()
@@ -77,7 +77,7 @@ class Model(nn.Module):
         self.aas_rgb_encoder = nn.Sequential(nn.Conv1d(1024, 512, 1), nn.ReLU(), nn.Conv1d(512, 1, 1))
         self.aas_flow_encoder = nn.Sequential(nn.Conv1d(1024, 512, 1), nn.ReLU(), nn.Conv1d(512, 1, 1))
 
-        # ref: Cross-modal Consensus Network for Weakly Supervised Temporal Action Localization (ACM MM 2021)
+        # ref: A Hybrid Attention Mechanism for Weakly-Supervised Temporal Action Localization (AAAI 2021)
         if num_classes != 20:
             pool = nn.AvgPool1d(13, 1, padding=6, count_include_pad=True)
             self.cas_rgb_encoder.append(pool)
