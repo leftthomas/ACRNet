@@ -102,14 +102,14 @@ default values.
 <tbody>
   <tr>
     <td align="center">ACRNet</td>
-    <td align="center">75.6</td>
-    <td align="center">69.7</td>
-    <td align="center">60.1</td>
-    <td align="center">48.3</td>
-    <td align="center">36.3</td>
-    <td align="center">24.3</td>
-    <td align="center">13.1</td>
-    <td align="center">46.8</td>
+    <td align="center">76.7</td>
+    <td align="center">70.7</td>
+    <td align="center">61.0</td>
+    <td align="center">49.0</td>
+    <td align="center">37.0</td>
+    <td align="center">24.8</td>
+    <td align="center">13.4</td>
+    <td align="center">47.5</td>
     <td align="center"><a href="https://mega.nz/folder/Wp8A3a7C#bxvp6NuLMUoFJ5oZD1Z2dw">MEGA</a></td>
   </tr>
 </tbody>
