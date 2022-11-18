@@ -141,13 +141,13 @@ mAP@AVG is the average mAP under the thresholds 0.1:0.1:0.7.
 <tbody>
   <tr>
     <td align="center">ACRNet</td>
-    <td align="center">41.2</td>
-    <td align="center">25.6</td>
-    <td align="center">6.0</td>
+    <td align="center">46.2</td>
     <td align="center">28.4</td>
-    <td align="center">37.0</td>
-    <td align="center">23.9</td>
     <td align="center">5.7</td>
+    <td align="center">28.4</td>
+    <td align="center">40.9</td>
+    <td align="center">26.0</td>
+    <td align="center">5.4</td>
     <td align="center">25.7</td>
     <td align="center"><a href="https://pan.baidu.com/s/11_7eu29IQ50rBU2W-dFceg">MEGA</a></td>
   </tr>
