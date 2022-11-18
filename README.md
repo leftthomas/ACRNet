@@ -110,7 +110,7 @@ default values.
     <td align="center">24.1</td>
     <td align="center">13.1</td>
     <td align="center">46.7</td>
-    <td align="center"><a href="https://pan.baidu.com/s/1mv-RHb9VNu2FYBdzjNehPA">MEGA</a></td>
+    <td align="center"><a href="https://mega.nz/folder/Wp8A3a7C#bxvp6NuLMUoFJ5oZD1Z2dw">MEGA</a></td>
   </tr>
 </tbody>
 </table>
@@ -149,7 +149,7 @@ mAP@AVG is the average mAP under the thresholds 0.1:0.1:0.7.
     <td align="center">26.0</td>
     <td align="center">5.4</td>
     <td align="center">25.7</td>
-    <td align="center"><a href="https://pan.baidu.com/s/11_7eu29IQ50rBU2W-dFceg">MEGA</a></td>
+    <td align="center"><a href="https://mega.nz/folder/25sjxQJb#ypIrl0AWG7sFpD3KfQ1xLg">MEGA</a></td>
   </tr>
 </tbody>
 </table>
