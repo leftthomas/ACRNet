@@ -121,7 +121,8 @@ def filter_results(results, ambi_file):
                         continue
                     else:
                         filtered.append(item)
-                results['results'][key] = filtered
+                value = filtered
+        results['results'][key] = value
     return results
 
 
