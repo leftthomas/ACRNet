@@ -21,7 +21,7 @@ pip install openmim
 mim install mmaction2 -f https://github.com/open-mmlab/mmaction2.git
 ```
 
-## Dataset
+## Datasets
 
 [THUMOS 14](http://crcv.ucf.edu/THUMOS14/download.html) and [ActivityNet](http://activity-net.org/download.html)
 datasets are used in this repo, you should download these datasets from official websites. The RGB and Flow features of
@@ -115,7 +115,7 @@ default values.
 </tbody>
 </table>
 
-mAP@AVG is the average mAP under the thresholds 0.1:0.1:0.7.
+mAP@AVG is the average mAP under the thresholds [0.1:0.1:0.7].
 
 ### ActivityNet
 
@@ -154,4 +154,4 @@ mAP@AVG is the average mAP under the thresholds 0.1:0.1:0.7.
 </tbody>
 </table>
 
-mAP@AVG is the average mAP under the thresholds 0.5:0.05:0.95.
+mAP@AVG is the average mAP under the thresholds [0.5:0.05:0.95].
