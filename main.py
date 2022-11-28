@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from dataset import VideoDataset
 from model import Model, cross_entropy, generalized_cross_entropy
-from utils import parse_args, oic_score, revert_frame, grouping, result2json, draw_pred, filter_results
+from utils import parse_args, oic_score, revert_frame, grouping, result2json, filter_results
 
 
 def test_loop(net, data_loader, num_iter):
@@ -57,9 +57,7 @@ def test_loop(net, data_loader, num_iter):
                     if i in proposal_dict:
                         proposal_dict[i] = soft_nms(np.array(proposal_dict[i]), args.alpha, args.iou_th, args.iou_th,
                                                     top_k=len(proposal_dict[i])).tolist()
-            if args.save_vis:
-                # draw the pred to vis
-                draw_pred(frame_score, proposal_dict, data_loader.dataset, video_name, args.fps, args.save_path)
+
             results['results'][video_name] = result2json(proposal_dict, data_loader.dataset.idx_to_class)
 
         test_acc = num_correct / num_total
