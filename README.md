@@ -1,7 +1,7 @@
 # ACRNet
 
 A PyTorch implementation of ACRNet based on ICME 2023 paper
-[Weakly-supervised Temporal Action Localization with Adaptive Clustering and Refining Network]().
+[Weakly-supervised Temporal Action Localization with Adaptive Clustering and Refining Network](https://ieeexplore.ieee.org/abstract/document/10219653).
 
 ![Network Architecture](result/model.png)
 
